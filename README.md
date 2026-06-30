@@ -72,10 +72,11 @@ Tile  { text, symbol, bg, action: speak | goto(boardId) }
 
 ## Symbols
 
-Tiles can use **emoji** (offline, zero-dependency) or real **[ARASAAC](https://arasaac.org)
-pictograms**, searchable right inside the tile editor. A picked pictogram is
-fetched and **embedded as a data URL**, so it keeps working offline and survives
-without any network call.
+Tiles can use **emoji** (offline, zero-dependency), real **[ARASAAC](https://arasaac.org)
+pictograms** searchable right inside the tile editor, or **your own uploaded
+image** (or a photo on mobile). Pictograms and uploads are **embedded as data
+URLs** — uploads are resized/compressed first — so symbols keep working offline
+and survive without any network call.
 
 > Pictograms are by **ARASAAC** (Gobierno de Aragón, author Sergio Palao),
 > licensed **CC BY-NC-SA**. Attribution is shown in the symbol picker. Non-commercial use.
