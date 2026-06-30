@@ -2,7 +2,7 @@
 // Top level is a set of Profiles (one per communicator); the active profile
 // holds the boards. Plus a sentence-in-progress and editing state.
 
-import type { AppData, Board, Profile, SpokenWord, Tile, TileAction } from './types';
+import type { AppData, Board, Profile, SpokenWord, Tile, TileAction, VoicePref } from './types';
 import { seedBoards } from './seed';
 import { speak } from './speech';
 import { COLORS } from './palette';
@@ -70,6 +70,7 @@ let editMode = $state(false);
 let editorOpen = $state(false);
 let editorIndex = $state<number | null>(null); // null => creating a new tile
 let profilesOpen = $state(false);
+let voiceOpen = $state(false);
 
 export const app = {
   // ----- profiles -----
@@ -81,6 +82,12 @@ export const app = {
   },
   get profilesOpen(): boolean {
     return profilesOpen;
+  },
+  get voiceOpen(): boolean {
+    return voiceOpen;
+  },
+  get voice(): VoicePref {
+    return this.activeProfile.voice ?? {};
   },
 
   // ----- boards -----
@@ -120,7 +127,7 @@ export const app = {
       return;
     }
     utterance = [...utterance, { id: `w${++wordSeq}`, text: tile.text, symbol: tile.symbol }];
-    speak(tile.text);
+    speak(tile.text, { voiceURI: this.voice.uri, rate: this.voice.rate });
   },
   openBoard(boardId: string): void {
     if (this.activeProfile.boards[boardId]) currentBoardId = boardId;
@@ -129,7 +136,7 @@ export const app = {
     currentBoardId = this.activeProfile.homeId;
   },
   speakAll(): void {
-    speak(this.sentence);
+    speak(this.sentence, { voiceURI: this.voice.uri, rate: this.voice.rate });
   },
   backspace(): void {
     utterance = utterance.slice(0, -1);
@@ -264,6 +271,24 @@ export const app = {
       data.activeProfileId = data.profiles[0].id;
       currentBoardId = this.activeProfile.homeId;
     }
+    this.persist();
+  },
+
+  // ----- voice settings (per active profile) -----
+  openVoice(): void {
+    voiceOpen = true;
+  },
+  closeVoice(): void {
+    voiceOpen = false;
+  },
+  setVoiceURI(uri: string | null): void {
+    const p = this.activeProfile;
+    p.voice = { ...(p.voice ?? {}), uri: uri ?? undefined };
+    this.persist();
+  },
+  setVoiceRate(rate: number): void {
+    const p = this.activeProfile;
+    p.voice = { ...(p.voice ?? {}), rate };
     this.persist();
   },
 
