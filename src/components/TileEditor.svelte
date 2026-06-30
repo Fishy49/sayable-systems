@@ -6,7 +6,7 @@
 
   const existing = $derived(app.editorTile);
   const isNew = $derived(app.editorIsNew);
-  const boards = $derived(Object.values(app.boardSet.boards));
+  const boards = $derived(Object.values(app.activeProfile.boards));
 
   // Local draft. Re-seeded whenever the editor opens for a (different) tile.
   let text = $state('');

@@ -1,7 +1,8 @@
 // Core data model for Sayable.
 //
 // The whole app is "a grid of tiles; each tile either speaks a word or opens
-// another board." That's it. Everything else is presentation.
+// another board." Boards are grouped into a Profile (one per communicator),
+// and the app holds a set of profiles with one active at a time.
 
 export type TileAction =
   | { kind: 'speak' } // say this tile's text and add it to the sentence
@@ -10,7 +11,7 @@ export type TileAction =
 export interface Tile {
   id: string;
   text: string; // the word or phrase to speak
-  symbol: string; // an emoji glyph today; a picture URL is a drop-in upgrade
+  symbol: string; // an emoji glyph, or an image (URL / data URL)
   bg: string; // tile background color (hex)
   action: TileAction;
 }
@@ -23,10 +24,19 @@ export interface Board {
   tiles: Tile[];
 }
 
-export interface BoardSet {
-  version: number;
+// A Profile is one person's named set of boards.
+export interface Profile {
+  id: string;
+  name: string;
   homeId: string;
   boards: Record<string, Board>;
+}
+
+// Top-level persisted state: every profile, plus which one is active.
+export interface AppData {
+  version: number;
+  activeProfileId: string;
+  profiles: Profile[];
 }
 
 // One entry in the sentence the communicator is building.

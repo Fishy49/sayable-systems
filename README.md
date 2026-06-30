@@ -84,7 +84,8 @@ without any network call.
 
 - [x] **Board editor** — add/move/recolor tiles, drag-to-reorder, link/create boards (auto-saved)
 - [x] **Real symbol library** — ARASAAC pictogram search, embedded offline
+- [x] **Profiles** — multiple named board sets (one per communicator) with a switcher
 - [ ] **Category icons** — pair each color with a shape/icon for colorblind & low-vision users
 - [ ] **Voice picker** — choose among installed system voices, save the preference
 - [ ] **Offline service worker** — true offline install via the PWA
-- [ ] **Per-person profiles** — export/import a board set as a single file
+- [ ] **Profile export/import** — save/load a profile as a single shareable file
