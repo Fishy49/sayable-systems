@@ -681,6 +681,31 @@ img.sym-img.chip-sym {
   color: inherit;
 }
 
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-weight: 700;
+  padding: 14px 20px;
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  background: #e0f2fe;
+  color: #075985;
+  cursor: pointer;
+}
+
+.upload-btn input {
+  display: none;
+}
+
 /* ---------- profile chip (top bar) ---------- */
 .profile-chip {
   display: inline-flex;

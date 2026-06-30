@@ -1,6 +1,12 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { searchPictograms, toDataUrl, isImageSymbol, type Pictogram } from '../lib/symbols';
+  import {
+    searchPictograms,
+    toDataUrl,
+    fileToResizedDataUrl,
+    isImageSymbol,
+    type Pictogram,
+  } from '../lib/symbols';
   import { QUICK_EMOJIS } from '../lib/palette';
 
   let {
@@ -16,12 +22,13 @@
   // Initialise the tab + emoji field from the symbol the editor opened with.
   // Read once (untracked) so picking a symbol doesn't yank the tab back.
   const initialValue = untrack(() => value);
-  let mode = $state<'emoji' | 'search'>(isImageSymbol(initialValue) ? 'search' : 'emoji');
+  let mode = $state<'emoji' | 'search' | 'upload'>(isImageSymbol(initialValue) ? 'search' : 'emoji');
   let emojiText = $state(isImageSymbol(initialValue) ? '' : initialValue);
   let query = $state('');
   let results = $state<Pictogram[]>([]);
   let searching = $state(false);
   let embedding = $state(false);
+  let processing = $state(false);
   let note = $state('');
   let ctrl: AbortController | null = null;
 
@@ -68,6 +75,22 @@
     }
   }
 
+  async function onFile(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // let the same file be re-picked later
+    if (!file) return;
+    processing = true;
+    note = '';
+    try {
+      onchange(await fileToResizedDataUrl(file));
+    } catch (err) {
+      note = (err as Error).message || 'Could not use that image.';
+    } finally {
+      processing = false;
+    }
+  }
+
   function onKey(e: KeyboardEvent) {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -80,6 +103,7 @@
   <div class="picker-tabs">
     <button type="button" class:sel={mode === 'emoji'} onclick={() => (mode = 'emoji')}>😀 Emoji</button>
     <button type="button" class:sel={mode === 'search'} onclick={toSearchTab}>🔎 Symbols</button>
+    <button type="button" class:sel={mode === 'upload'} onclick={() => (mode = 'upload')}>📷 Upload</button>
   </div>
 
   {#if mode === 'emoji'}
@@ -98,7 +122,7 @@
         {/each}
       </div>
     </div>
-  {:else}
+  {:else if mode === 'search'}
     <div class="search-row">
       <input class="text-in" bind:value={query} onkeydown={onKey} placeholder="Search symbols (e.g. water)" />
       <button type="button" class="primary" onclick={runSearch} disabled={searching}>
@@ -125,5 +149,14 @@
     <p class="attribution">
       Symbols: <a href="https://arasaac.org" target="_blank" rel="noreferrer">ARASAAC</a> · CC BY-NC-SA · Gobierno de Aragón (Sergio Palao)
     </p>
+  {:else}
+    <div class="upload-area">
+      <label class="upload-btn">
+        {processing ? 'Processing…' : '📷 Choose image'}
+        <input type="file" accept="image/*" onchange={onFile} hidden />
+      </label>
+      <p class="picker-note">Pictures are resized and saved on your device.</p>
+      {#if note}<p class="picker-note">{note}</p>{/if}
+    </div>
   {/if}
 </div>

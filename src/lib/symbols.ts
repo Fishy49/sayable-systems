@@ -51,3 +51,51 @@ export async function toDataUrl(url: string, signal?: AbortSignal): Promise<stri
     reader.readAsDataURL(blob);
   });
 }
+
+/**
+ * Turn an uploaded image File into a small, self-contained data URL: decoded,
+ * scaled down to `maxSize`, and re-encoded. Keeps localStorage light and the
+ * symbol fully offline. Falls back from WebP to PNG where WebP export is absent.
+ */
+export function fileToResizedDataUrl(file: File, maxSize = 320, quality = 0.82): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('Please choose an image file.'));
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Could not process that image.'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, w, h);
+      let out = '';
+      try {
+        out = canvas.toDataURL('image/webp', quality);
+      } catch {
+        out = '';
+      }
+      if (!out.startsWith('data:image/webp')) out = canvas.toDataURL('image/png');
+      if (!out || out === 'data:,') {
+        reject(new Error('Could not process that image.'));
+        return;
+      }
+      resolve(out);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not read that image.'));
+    };
+    img.src = url;
+  });
+}
