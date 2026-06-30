@@ -37,6 +37,7 @@ export interface Profile {
   homeId: string;
   boards: Record<string, Board>;
   voice?: VoicePref;
+  showShapes?: boolean; // category shape badges (default on when undefined)
 }
 
 // Top-level persisted state: every profile, plus which one is active.

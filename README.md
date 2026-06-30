@@ -87,6 +87,6 @@ and survive without any network call.
 - [x] **Real symbol library** — ARASAAC pictogram search, embedded offline
 - [x] **Profiles** — multiple named board sets (one per communicator) with a switcher
 - [x] **Voice picker** — per-profile system voice + speaking speed, with a Test button
-- [ ] **Category icons** — pair each color with a shape/icon for colorblind & low-vision users
+- [x] **Category shapes** — a distinct shape per word type (shape-coding) for colorblind/low-vision users; toggleable
 - [ ] **Offline service worker** — true offline install via the PWA
 - [ ] **Profile export/import** — save/load a profile as a single shareable file

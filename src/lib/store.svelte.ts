@@ -70,7 +70,7 @@ let editMode = $state(false);
 let editorOpen = $state(false);
 let editorIndex = $state<number | null>(null); // null => creating a new tile
 let profilesOpen = $state(false);
-let voiceOpen = $state(false);
+let settingsOpen = $state(false);
 
 export const app = {
   // ----- profiles -----
@@ -83,11 +83,14 @@ export const app = {
   get profilesOpen(): boolean {
     return profilesOpen;
   },
-  get voiceOpen(): boolean {
-    return voiceOpen;
+  get settingsOpen(): boolean {
+    return settingsOpen;
   },
   get voice(): VoicePref {
     return this.activeProfile.voice ?? {};
+  },
+  get categoryShapes(): boolean {
+    return this.activeProfile.showShapes !== false;
   },
 
   // ----- boards -----
@@ -274,12 +277,12 @@ export const app = {
     this.persist();
   },
 
-  // ----- voice settings (per active profile) -----
-  openVoice(): void {
-    voiceOpen = true;
+  // ----- settings (per active profile) -----
+  openSettings(): void {
+    settingsOpen = true;
   },
-  closeVoice(): void {
-    voiceOpen = false;
+  closeSettings(): void {
+    settingsOpen = false;
   },
   setVoiceURI(uri: string | null): void {
     const p = this.activeProfile;
@@ -289,6 +292,10 @@ export const app = {
   setVoiceRate(rate: number): void {
     const p = this.activeProfile;
     p.voice = { ...(p.voice ?? {}), rate };
+    this.persist();
+  },
+  setShowShapes(on: boolean): void {
+    this.activeProfile.showShapes = on;
     this.persist();
   },
 

@@ -7,7 +7,7 @@
 
   // Load voices (and keep up with their async arrival) while the modal is open.
   $effect(() => {
-    if (!app.voiceOpen) return;
+    if (!app.settingsOpen) return;
     voices = getVoices();
     return onVoicesChanged(() => {
       voices = getVoices();
@@ -28,24 +28,24 @@
     speak('Hi! This is how I sound.', { voiceURI: app.voice.uri, rate: app.voice.rate });
   }
   function onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') app.closeVoice();
+    if (e.key === 'Escape') app.closeSettings();
   }
 </script>
 
 <svelte:window onkeydown={onKey} />
 
-{#if app.voiceOpen}
-  <div class="modal-backdrop" onclick={() => app.closeVoice()} role="presentation">
+{#if app.settingsOpen}
+  <div class="modal-backdrop" onclick={() => app.closeSettings()} role="presentation">
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div
-      class="modal voice-modal"
+      class="modal settings-modal"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
-      aria-label="Voice settings"
+      aria-label="Settings"
       onclick={(e) => e.stopPropagation()}
     >
-      <div class="modal-head">Voice · {app.activeProfile.name}</div>
+      <div class="modal-head">Settings · {app.activeProfile.name}</div>
 
       <div class="field">
         <span class="field-label">Voice</span>
@@ -56,10 +56,7 @@
           {/each}
         </select>
         {#if voices.length === 0}
-          <p class="picker-note">
-            No installed voices detected yet — your device may add them in a moment, or this browser
-            may not expose them. The default voice will still be used.
-          </p>
+          <p class="picker-note">No installed voices detected yet — the default voice will be used.</p>
         {/if}
       </div>
 
@@ -76,10 +73,23 @@
         />
       </div>
 
+      <label class="toggle-row">
+        <span class="toggle-text">
+          <span class="field-label">Category shapes</span>
+          <span class="toggle-hint">A shape per word type, so color isn’t the only cue.</span>
+        </span>
+        <input
+          type="checkbox"
+          class="switch"
+          checked={app.categoryShapes}
+          onchange={(e) => app.setShowShapes((e.target as HTMLInputElement).checked)}
+        />
+      </label>
+
       <div class="modal-actions">
-        <button class="ghost-dark" onclick={test}>▶ Test</button>
+        <button class="ghost-dark" onclick={test}>▶ Test voice</button>
         <span class="grow"></span>
-        <button class="primary" onclick={() => app.closeVoice()}>Done</button>
+        <button class="primary" onclick={() => app.closeSettings()}>Done</button>
       </div>
     </div>
   </div>
