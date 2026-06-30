@@ -68,60 +68,64 @@
     >
       <div class="modal-head">{isNew ? 'New tile' : 'Edit tile'}</div>
 
-      <div class="preview-tile" class:folder={actionKind === 'goto'} style="--bg:{bg};">
-        {#if actionKind === 'goto'}<span class="folder-tab" aria-hidden="true"></span>{/if}
-        <TileSymbol symbol={symbol || '⭐'} cls="tile-sym" />
-        <span class="tile-label">{text || '…'}</span>
-      </div>
-
-      <label class="field">
-        <span class="field-label">Words</span>
-        <input class="text-in" bind:value={text} placeholder="e.g. more please" />
-      </label>
-
-      <div class="field">
-        <span class="field-label">Picture</span>
-        <SymbolPicker value={symbol} suggest={text} onchange={(s) => (symbol = s)} />
-      </div>
-
-      <div class="field">
-        <span class="field-label">Color</span>
-        <div class="swatches">
-          {#each CATEGORIES as c}
-            <button
-              type="button"
-              class="swatch"
-              class:sel={bg === c.color}
-              style="--sw:{c.color}"
-              onclick={() => (bg = c.color)}
-            >
-              {c.label}
-            </button>
-          {/each}
+      <div class="modal-body">
+        <div class="field-preview">
+          <div class="preview-tile" class:folder={actionKind === 'goto'} style="--bg:{bg};">
+            {#if actionKind === 'goto'}<span class="folder-tab" aria-hidden="true"></span>{/if}
+            <TileSymbol symbol={symbol || '⭐'} cls="tile-sym" />
+            <span class="tile-label">{text || '…'}</span>
+          </div>
         </div>
-      </div>
 
-      <div class="field">
-        <span class="field-label">When tapped</span>
-        <div class="seg">
-          <button type="button" class:sel={actionKind === 'speak'} onclick={() => (actionKind = 'speak')}>
-            🔊 Say the words
-          </button>
-          <button type="button" class:sel={actionKind === 'goto'} onclick={() => (actionKind = 'goto')}>
-            📂 Open a board
-          </button>
+        <label class="field field-words">
+          <span class="field-label">Words</span>
+          <input class="text-in" bind:value={text} placeholder="e.g. more please" />
+        </label>
+
+        <div class="field field-picture">
+          <span class="field-label">Picture</span>
+          <SymbolPicker value={symbol} suggest={text} onchange={(s) => (symbol = s)} />
         </div>
-        {#if actionKind === 'goto'}
-          <select class="board-sel" bind:value={gotoBoardId}>
-            <option value="__new__">➕ New board…</option>
-            {#each boards as b}
-              <option value={b.id}>{b.name}</option>
+
+        <div class="field field-color">
+          <span class="field-label">Color</span>
+          <div class="swatches">
+            {#each CATEGORIES as c}
+              <button
+                type="button"
+                class="swatch"
+                class:sel={bg === c.color}
+                style="--sw:{c.color}"
+                onclick={() => (bg = c.color)}
+              >
+                {c.label}
+              </button>
             {/each}
-          </select>
-          {#if gotoBoardId === '__new__'}
-            <input class="text-in" bind:value={newBoardName} placeholder="New board name (optional)" />
+          </div>
+        </div>
+
+        <div class="field field-when">
+          <span class="field-label">When tapped</span>
+          <div class="seg">
+            <button type="button" class:sel={actionKind === 'speak'} onclick={() => (actionKind = 'speak')}>
+              🔊 Say the words
+            </button>
+            <button type="button" class:sel={actionKind === 'goto'} onclick={() => (actionKind = 'goto')}>
+              📂 Open a board
+            </button>
+          </div>
+          {#if actionKind === 'goto'}
+            <select class="board-sel" bind:value={gotoBoardId}>
+              <option value="__new__">➕ New board…</option>
+              {#each boards as b}
+                <option value={b.id}>{b.name}</option>
+              {/each}
+            </select>
+            {#if gotoBoardId === '__new__'}
+              <input class="text-in" bind:value={newBoardName} placeholder="New board name (optional)" />
+            {/if}
           {/if}
-        {/if}
+        </div>
       </div>
 
       <div class="modal-actions">
