@@ -829,6 +829,21 @@ img.sym-img.chip-sym {
   line-height: 1;
 }
 
+.ghost.icon-only {
+  padding: 8px 11px;
+}
+
+/* ---------- voice modal ---------- */
+.voice-modal {
+  max-width: 440px;
+}
+
+.range {
+  width: 100%;
+  accent-color: var(--accent);
+  height: 28px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tile,
   .bar-btn,

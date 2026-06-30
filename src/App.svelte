@@ -5,6 +5,7 @@
   import BoardGrid from './components/BoardGrid.svelte';
   import TileEditor from './components/TileEditor.svelte';
   import ProfilesModal from './components/ProfilesModal.svelte';
+  import VoiceModal from './components/VoiceModal.svelte';
 
   const noSpeech = !speechSupported();
 
@@ -27,6 +28,7 @@
         <span aria-hidden="true">👤</span>
         <span class="pchip-name">{app.activeProfile.name}</span>
       </button>
+      <button class="ghost icon-only" onclick={() => app.openVoice()} aria-label="Voice settings">⚙️</button>
       {#if !app.isHome}
         <button class="ghost" onclick={() => app.goHome()}>🏠 Home</button>
       {/if}
@@ -58,3 +60,4 @@
 
 <TileEditor />
 <ProfilesModal />
+<VoiceModal />

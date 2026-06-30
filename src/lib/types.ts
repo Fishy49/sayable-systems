@@ -24,12 +24,19 @@ export interface Board {
   tiles: Tile[];
 }
 
-// A Profile is one person's named set of boards.
+// A communicator's chosen speech voice (system voiceURI) and speaking rate.
+export interface VoicePref {
+  uri?: string;
+  rate?: number;
+}
+
+// A Profile is one person's named set of boards (and their voice).
 export interface Profile {
   id: string;
   name: string;
   homeId: string;
   boards: Record<string, Board>;
+  voice?: VoicePref;
 }
 
 // Top-level persisted state: every profile, plus which one is active.
