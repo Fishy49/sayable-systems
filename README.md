@@ -70,11 +70,21 @@ Board { name, rows, cols, tiles: Tile[] }
 Tile  { text, symbol, bg, action: speak | goto(boardId) }
 ```
 
+## Symbols
+
+Tiles can use **emoji** (offline, zero-dependency) or real **[ARASAAC](https://arasaac.org)
+pictograms**, searchable right inside the tile editor. A picked pictogram is
+fetched and **embedded as a data URL**, so it keeps working offline and survives
+without any network call.
+
+> Pictograms are by **ARASAAC** (Gobierno de Aragón, author Sergio Palao),
+> licensed **CC BY-NC-SA**. Attribution is shown in the symbol picker. Non-commercial use.
+
 ## Roadmap
 
-- [ ] **Board editor** — add/move/recolor tiles, link boards (with local persistence)
-- [ ] **Real symbol library** — swap emoji for [ARASAAC](https://arasaac.org)
-      pictograms or uploaded photos (the `symbol` field already supports a URL)
+- [x] **Board editor** — add/move/recolor tiles, drag-to-reorder, link/create boards (auto-saved)
+- [x] **Real symbol library** — ARASAAC pictogram search, embedded offline
+- [ ] **Category icons** — pair each color with a shape/icon for colorblind & low-vision users
 - [ ] **Voice picker** — choose among installed system voices, save the preference
 - [ ] **Offline service worker** — true offline install via the PWA
 - [ ] **Per-person profiles** — export/import a board set as a single file

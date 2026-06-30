@@ -1,5 +1,6 @@
 <script lang="ts">
   import { app } from '../lib/store.svelte';
+  import TileSymbol from './TileSymbol.svelte';
 </script>
 
 <section class="utterance">
@@ -8,7 +9,7 @@
       <span class="placeholder">Tap pictures to talk…</span>
     {:else}
       {#each app.utterance as word (word.id)}
-        <span class="chip"><span class="chip-sym">{word.symbol}</span>{word.text}</span>
+        <span class="chip"><TileSymbol symbol={word.symbol} cls="chip-sym" />{word.text}</span>
       {/each}
     {/if}
   </button>

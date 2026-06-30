@@ -1,6 +1,8 @@
 <script lang="ts">
   import { app } from '../lib/store.svelte';
-  import { CATEGORIES, QUICK_EMOJIS } from '../lib/palette';
+  import { CATEGORIES } from '../lib/palette';
+  import SymbolPicker from './SymbolPicker.svelte';
+  import TileSymbol from './TileSymbol.svelte';
 
   const existing = $derived(app.editorTile);
   const isNew = $derived(app.editorIsNew);
@@ -68,7 +70,7 @@
 
       <div class="preview-tile" class:folder={actionKind === 'goto'} style="--bg:{bg};">
         {#if actionKind === 'goto'}<span class="folder-tab" aria-hidden="true"></span>{/if}
-        <span class="tile-sym">{symbol || '⭐'}</span>
+        <TileSymbol symbol={symbol || '⭐'} cls="tile-sym" />
         <span class="tile-label">{text || '…'}</span>
       </div>
 
@@ -79,16 +81,7 @@
 
       <div class="field">
         <span class="field-label">Picture</span>
-        <div class="emoji-area">
-          <input class="emoji-in" bind:value={symbol} maxlength="6" aria-label="Type or paste an emoji" />
-          <div class="emoji-grid">
-            {#each QUICK_EMOJIS as e}
-              <button type="button" class="emoji-opt" class:sel={symbol === e} onclick={() => (symbol = e)}>
-                {e}
-              </button>
-            {/each}
-          </div>
-        </div>
+        <SymbolPicker value={symbol} suggest={text} onchange={(s) => (symbol = s)} />
       </div>
 
       <div class="field">
