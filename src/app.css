@@ -681,6 +681,129 @@ img.sym-img.chip-sym {
   color: inherit;
 }
 
+/* ---------- profile chip (top bar) ---------- */
+.profile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 200px;
+}
+
+.pchip-name {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- profiles switcher ---------- */
+.profiles-modal {
+  max-width: 600px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.pcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  min-height: 104px;
+}
+
+.pcard.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.25);
+}
+
+.pcard-check {
+  position: absolute;
+  top: 8px;
+  right: 11px;
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.pcard-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.pcard-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.pcard-meta {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.pcard-tools {
+  display: flex;
+  gap: 4px;
+  padding: 0 10px 10px;
+}
+
+.icon-btn {
+  font: inherit;
+  font-size: 1rem;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.pcard-rename {
+  margin: 12px 12px 8px;
+}
+
+.pcard.adding {
+  padding: 12px;
+  gap: 8px;
+  justify-content: center;
+}
+
+.adding-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.pcard-add {
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-style: dashed;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.pcard-add-plus {
+  font-size: 1.9rem;
+  font-weight: 300;
+  line-height: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tile,
   .bar-btn,

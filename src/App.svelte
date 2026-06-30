@@ -4,6 +4,7 @@
   import UtteranceBar from './components/UtteranceBar.svelte';
   import BoardGrid from './components/BoardGrid.svelte';
   import TileEditor from './components/TileEditor.svelte';
+  import ProfilesModal from './components/ProfilesModal.svelte';
 
   const noSpeech = !speechSupported();
 
@@ -22,6 +23,10 @@
     </div>
     <div class="crumb">{app.board.name}</div>
     <div class="top-actions">
+      <button class="ghost profile-chip" onclick={() => app.openProfiles()} aria-label="Switch profile">
+        <span aria-hidden="true">👤</span>
+        <span class="pchip-name">{app.activeProfile.name}</span>
+      </button>
       {#if !app.isHome}
         <button class="ghost" onclick={() => app.goHome()}>🏠 Home</button>
       {/if}
@@ -52,3 +57,4 @@
 </div>
 
 <TileEditor />
+<ProfilesModal />

@@ -1,12 +1,14 @@
 // App state, as a small reactive store using Svelte 5 runes.
-// One communicator, one board set, one sentence-in-progress — plus editing.
+// Top level is a set of Profiles (one per communicator); the active profile
+// holds the boards. Plus a sentence-in-progress and editing state.
 
-import type { Board, BoardSet, SpokenWord, Tile, TileAction } from './types';
-import { seedBoardSet } from './seed';
+import type { AppData, Board, Profile, SpokenWord, Tile, TileAction } from './types';
+import { seedBoards } from './seed';
 import { speak } from './speech';
 import { COLORS } from './palette';
 
-const STORAGE_KEY = 'sayable.boardset.v1';
+const APP_KEY = 'sayable.app.v1';
+const OLD_KEY = 'sayable.boardset.v1'; // pre-profiles single board set
 
 function uid(prefix = 't'): string {
   const c = globalThis.crypto;
@@ -14,16 +16,37 @@ function uid(prefix = 't'): string {
   return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function loadBoardSet(): BoardSet {
+function makeProfile(name: string): Profile {
+  const { homeId, boards } = seedBoards();
+  return { id: uid('p'), name, homeId, boards };
+}
+
+function seedAppData(): AppData {
+  const p = makeProfile('My boards');
+  return { version: 1, activeProfileId: p.id, profiles: [p] };
+}
+
+function load(): AppData {
   if (typeof localStorage !== 'undefined') {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw) as BoardSet;
+      const raw = localStorage.getItem(APP_KEY);
+      if (raw) return JSON.parse(raw) as AppData;
     } catch {
-      // Corrupt or unreadable storage — fall back to the bundled starter set.
+      // ignore and try migration / seed
+    }
+    // Migrate the older single-board-set format into a default profile.
+    try {
+      const old = localStorage.getItem(OLD_KEY);
+      if (old) {
+        const bs = JSON.parse(old) as { homeId: string; boards: Record<string, Board> };
+        const p: Profile = { id: uid('p'), name: 'My boards', homeId: bs.homeId, boards: bs.boards };
+        return { version: 1, activeProfileId: p.id, profiles: [p] };
+      }
+    } catch {
+      // ignore and seed
     }
   }
-  return seedBoardSet();
+  return seedAppData();
 }
 
 // What the tile editor hands back when you save.
@@ -36,33 +59,48 @@ export interface TileDraft {
   newBoardName?: string;
 }
 
-const initialSet = loadBoardSet();
-let boardSet = $state<BoardSet>(initialSet);
-let currentBoardId = $state<string>(initialSet.homeId);
+const initial = load();
+let data = $state<AppData>(initial);
+const initialActive = initial.profiles.find((p) => p.id === initial.activeProfileId) ?? initial.profiles[0];
+let currentBoardId = $state<string>(initialActive.homeId);
 let utterance = $state<SpokenWord[]>([]);
 let wordSeq = 0;
 
 let editMode = $state(false);
 let editorOpen = $state(false);
 let editorIndex = $state<number | null>(null); // null => creating a new tile
+let profilesOpen = $state(false);
 
 export const app = {
-  get boardSet(): BoardSet {
-    return boardSet;
+  // ----- profiles -----
+  get profiles(): Profile[] {
+    return data.profiles;
   },
+  get activeProfile(): Profile {
+    return data.profiles.find((p) => p.id === data.activeProfileId) ?? data.profiles[0];
+  },
+  get profilesOpen(): boolean {
+    return profilesOpen;
+  },
+
+  // ----- boards -----
   get board(): Board {
-    return boardSet.boards[currentBoardId] ?? boardSet.boards[boardSet.homeId];
+    const p = this.activeProfile;
+    return p.boards[currentBoardId] ?? p.boards[p.homeId];
   },
+  get isHome(): boolean {
+    return currentBoardId === this.activeProfile.homeId;
+  },
+
+  // ----- talking -----
   get utterance(): SpokenWord[] {
     return utterance;
   },
   get sentence(): string {
     return utterance.map((w) => w.text).join(' ');
   },
-  get isHome(): boolean {
-    return currentBoardId === boardSet.homeId;
-  },
 
+  // ----- editing -----
   get editMode(): boolean {
     return editMode;
   },
@@ -76,7 +114,6 @@ export const app = {
     return editorIndex === null ? null : (this.board.tiles[editorIndex] ?? null);
   },
 
-  // ----- talking -----
   tap(tile: Tile): void {
     if (tile.action.kind === 'goto') {
       this.openBoard(tile.action.boardId);
@@ -86,10 +123,10 @@ export const app = {
     speak(tile.text);
   },
   openBoard(boardId: string): void {
-    if (boardSet.boards[boardId]) currentBoardId = boardId;
+    if (this.activeProfile.boards[boardId]) currentBoardId = boardId;
   },
   goHome(): void {
-    currentBoardId = boardSet.homeId;
+    currentBoardId = this.activeProfile.homeId;
   },
   speakAll(): void {
     speak(this.sentence);
@@ -101,7 +138,6 @@ export const app = {
     utterance = [];
   },
 
-  // ----- editing -----
   toggleEdit(): void {
     editMode = !editMode;
     if (!editMode) this.closeEditor();
@@ -159,8 +195,9 @@ export const app = {
   },
 
   addBoard(name: string): string {
+    const profile = this.activeProfile;
     const id = uid('b');
-    boardSet.boards[id] = {
+    profile.boards[id] = {
       id,
       name: name || 'New board',
       rows: 3,
@@ -171,7 +208,7 @@ export const app = {
           text: 'Back',
           symbol: '🔙',
           bg: COLORS.folder,
-          action: { kind: 'goto', boardId: boardSet.homeId },
+          action: { kind: 'goto', boardId: profile.homeId },
         },
       ],
     };
@@ -179,16 +216,60 @@ export const app = {
   },
 
   resetToDefaults(): void {
-    boardSet = seedBoardSet();
-    currentBoardId = boardSet.homeId;
+    const fresh = seedBoards();
+    const p = this.activeProfile;
+    p.homeId = fresh.homeId;
+    p.boards = fresh.boards;
+    currentBoardId = fresh.homeId;
     editMode = false;
     this.closeEditor();
     this.persist();
   },
 
+  // ----- profile switcher -----
+  openProfiles(): void {
+    profilesOpen = true;
+  },
+  closeProfiles(): void {
+    profilesOpen = false;
+  },
+  switchProfile(id: string): void {
+    if (!data.profiles.some((p) => p.id === id)) return;
+    data.activeProfileId = id;
+    currentBoardId = this.activeProfile.homeId;
+    editMode = false;
+    this.closeEditor();
+    this.closeProfiles();
+    this.persist();
+  },
+  addProfile(name: string): string {
+    const p = makeProfile((name || '').trim() || `Profile ${data.profiles.length + 1}`);
+    data.profiles.push(p);
+    this.persist();
+    return p.id;
+  },
+  renameProfile(id: string, name: string): void {
+    const p = data.profiles.find((x) => x.id === id);
+    if (p) {
+      p.name = (name || '').trim() || p.name;
+      this.persist();
+    }
+  },
+  deleteProfile(id: string): void {
+    if (data.profiles.length <= 1) return; // always keep at least one
+    const idx = data.profiles.findIndex((p) => p.id === id);
+    if (idx < 0) return;
+    data.profiles.splice(idx, 1);
+    if (data.activeProfileId === id) {
+      data.activeProfileId = data.profiles[0].id;
+      currentBoardId = this.activeProfile.homeId;
+    }
+    this.persist();
+  },
+
   persist(): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify($state.snapshot(boardSet)));
+      localStorage.setItem(APP_KEY, JSON.stringify($state.snapshot(data)));
     } catch {
       // Storage unavailable (private mode, quota) — edits still work this session.
     }

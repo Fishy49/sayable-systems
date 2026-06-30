@@ -2,7 +2,7 @@
 // words" plus a few category folders. Easy to replace per person later —
 // this is just so the app does something meaningful out of the box.
 
-import type { Board, BoardSet, Tile, TileAction } from './types';
+import type { Board, Tile, TileAction } from './types';
 import { COLORS as C } from './palette';
 
 let seq = 0;
@@ -17,7 +17,7 @@ function folder(text: string, symbol: string, boardId: string): Tile {
   return { id: nextId(), text, symbol, bg: C.folder, action };
 }
 
-export function seedBoardSet(): BoardSet {
+export function seedBoards(): { homeId: string; boards: Record<string, Board> } {
   const home: Board = {
     id: 'home',
     name: 'Home',
@@ -151,7 +151,6 @@ export function seedBoardSet(): BoardSet {
   };
 
   return {
-    version: 1,
     homeId: 'home',
     boards: { home, food, feelings, places, fun },
   };
