@@ -864,6 +864,22 @@ img.sym-img.chip-sym {
   height: 28px;
 }
 
+.voice-help {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.voice-help summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.voice-help p {
+  margin: 6px 0 0;
+  line-height: 1.35;
+}
+
 .toggle-row {
   display: flex;
   align-items: center;
