@@ -88,5 +88,5 @@ and survive without any network call.
 - [x] **Profiles** — multiple named board sets (one per communicator) with a switcher
 - [x] **Voice picker** — per-profile system voice + speaking speed, with a Test button
 - [x] **Category shapes** — a distinct shape per word type (shape-coding) for colorblind/low-vision users; toggleable
-- [ ] **Offline service worker** — true offline install via the PWA
+- [x] **Installable & offline** — service worker precaches the app shell; add to a home screen and run with no network
 - [ ] **Profile export/import** — save/load a profile as a single shareable file

@@ -21,6 +21,25 @@
 
   const rate = $derived(app.voice.rate ?? 0.95);
 
+  function detectVoiceHint(): string {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const touch = typeof window !== 'undefined' && 'ontouchend' in window;
+    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh|Mac OS X/.test(ua) && touch)) {
+      return 'On iPhone/iPad: Settings → Accessibility → Spoken Content → Voices → pick a language, then download an “Enhanced” or “Premium” voice.';
+    }
+    if (/Macintosh|Mac OS X/.test(ua)) {
+      return 'On Mac: System Settings → Accessibility → Spoken Content → System Voice → Manage Voices… → download an “Enhanced” or “Premium” voice.';
+    }
+    if (/Android/.test(ua)) {
+      return 'On Android: Settings → System → Languages & input → Text-to-speech → install or upgrade your voice data (Google’s voices work well).';
+    }
+    if (/Windows/.test(ua)) {
+      return 'On Windows: Settings → Time & language → Speech → Manage voices → add a “Natural” voice.';
+    }
+    return 'Your device’s accessibility / speech settings usually let you download higher-quality voices — look for “Enhanced”, “Premium”, or “Natural”.';
+  }
+  const voiceHint = detectVoiceHint();
+
   function onPick() {
     app.setVoiceURI(selected || null);
   }
@@ -58,6 +77,10 @@
         {#if voices.length === 0}
           <p class="picker-note">No installed voices detected yet — the default voice will be used.</p>
         {/if}
+        <details class="voice-help">
+          <summary>Want more natural voices?</summary>
+          <p>{voiceHint} They’ll show up in the list above once installed — all free and on-device.</p>
+        </details>
       </div>
 
       <div class="field">
