@@ -9,7 +9,6 @@ import { COLORS } from './palette';
 import { idbGet, idbSet } from './idb';
 
 const APP_KEY = 'sayable.app.v1';
-const OLD_KEY = 'sayable.boardset.v1'; // pre-profiles single board set
 
 function uid(prefix = 't'): string {
   const c = globalThis.crypto;
@@ -27,47 +26,15 @@ function seedAppData(): AppData {
   return { version: 1, activeProfileId: p.id, profiles: [p] };
 }
 
-// ---- durable storage: IndexedDB primary, localStorage as a migration source ----
-
-function readLocalStorage(): AppData | null {
-  if (typeof localStorage === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(APP_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as AppData;
-      if (parsed && parsed.profiles?.length) return parsed;
-    }
-  } catch {
-    // unreadable app record — try the older format below
-  }
-  try {
-    const old = localStorage.getItem(OLD_KEY);
-    if (old) {
-      const bs = JSON.parse(old) as { homeId: string; boards: Record<string, Board> };
-      const p: Profile = { id: uid('p'), name: 'My boards', homeId: bs.homeId, boards: bs.boards };
-      return { version: 1, activeProfileId: p.id, profiles: [p] };
-    }
-  } catch {
-    // fall through to seed
-  }
-  return null;
-}
+// ---- durable storage: IndexedDB ----
 
 async function loadData(): Promise<AppData> {
-  // 1. IndexedDB is the durable primary store.
   try {
-    const fromIdb = await idbGet<AppData>(APP_KEY);
-    if (fromIdb && fromIdb.profiles?.length) return fromIdb;
+    const stored = await idbGet<AppData>(APP_KEY);
+    if (stored && stored.profiles?.length) return stored;
   } catch {
-    // IndexedDB unavailable — fall back to localStorage below
+    // IndexedDB unavailable — start fresh (a failed save will surface loudly)
   }
-  // 2. Migrate an existing localStorage board set (kept intact as a fallback).
-  const fromLs = readLocalStorage();
-  if (fromLs) {
-    await writeData(fromLs);
-    return fromLs;
-  }
-  // 3. Brand-new install: seed.
   const seeded = seedAppData();
   await writeData(seeded);
   return seeded;
@@ -78,13 +45,7 @@ async function writeData(snapshot: AppData): Promise<void> {
     await idbSet(APP_KEY, snapshot);
     saveError = false;
   } catch {
-    // IndexedDB failed — best-effort fall back to localStorage (small data only).
-    try {
-      localStorage.setItem(APP_KEY, JSON.stringify(snapshot));
-      saveError = false;
-    } catch {
-      saveError = true; // out of room / storage blocked — surface it, don't swallow it
-    }
+    saveError = true; // storage blocked / out of room — surface it, never swallow it
   }
   void checkStorage();
 }
