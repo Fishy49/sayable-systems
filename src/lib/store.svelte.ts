@@ -6,6 +6,7 @@ import type { AppData, Board, Profile, SpokenWord, Tile, TileAction, VoicePref }
 import { seedBoards } from './seed';
 import { speak } from './speech';
 import { COLORS } from './palette';
+import { idbGet, idbSet } from './idb';
 
 const APP_KEY = 'sayable.app.v1';
 const OLD_KEY = 'sayable.boardset.v1'; // pre-profiles single board set
@@ -26,27 +27,89 @@ function seedAppData(): AppData {
   return { version: 1, activeProfileId: p.id, profiles: [p] };
 }
 
-function load(): AppData {
-  if (typeof localStorage !== 'undefined') {
-    try {
-      const raw = localStorage.getItem(APP_KEY);
-      if (raw) return JSON.parse(raw) as AppData;
-    } catch {
-      // ignore and try migration / seed
+// ---- durable storage: IndexedDB primary, localStorage as a migration source ----
+
+function readLocalStorage(): AppData | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(APP_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as AppData;
+      if (parsed && parsed.profiles?.length) return parsed;
     }
-    // Migrate the older single-board-set format into a default profile.
+  } catch {
+    // unreadable app record — try the older format below
+  }
+  try {
+    const old = localStorage.getItem(OLD_KEY);
+    if (old) {
+      const bs = JSON.parse(old) as { homeId: string; boards: Record<string, Board> };
+      const p: Profile = { id: uid('p'), name: 'My boards', homeId: bs.homeId, boards: bs.boards };
+      return { version: 1, activeProfileId: p.id, profiles: [p] };
+    }
+  } catch {
+    // fall through to seed
+  }
+  return null;
+}
+
+async function loadData(): Promise<AppData> {
+  // 1. IndexedDB is the durable primary store.
+  try {
+    const fromIdb = await idbGet<AppData>(APP_KEY);
+    if (fromIdb && fromIdb.profiles?.length) return fromIdb;
+  } catch {
+    // IndexedDB unavailable — fall back to localStorage below
+  }
+  // 2. Migrate an existing localStorage board set (kept intact as a fallback).
+  const fromLs = readLocalStorage();
+  if (fromLs) {
+    await writeData(fromLs);
+    return fromLs;
+  }
+  // 3. Brand-new install: seed.
+  const seeded = seedAppData();
+  await writeData(seeded);
+  return seeded;
+}
+
+async function writeData(snapshot: AppData): Promise<void> {
+  try {
+    await idbSet(APP_KEY, snapshot);
+    saveError = false;
+  } catch {
+    // IndexedDB failed — best-effort fall back to localStorage (small data only).
     try {
-      const old = localStorage.getItem(OLD_KEY);
-      if (old) {
-        const bs = JSON.parse(old) as { homeId: string; boards: Record<string, Board> };
-        const p: Profile = { id: uid('p'), name: 'My boards', homeId: bs.homeId, boards: bs.boards };
-        return { version: 1, activeProfileId: p.id, profiles: [p] };
-      }
+      localStorage.setItem(APP_KEY, JSON.stringify(snapshot));
+      saveError = false;
     } catch {
-      // ignore and seed
+      saveError = true; // out of room / storage blocked — surface it, don't swallow it
     }
   }
-  return seedAppData();
+  void checkStorage();
+}
+
+async function requestPersistence(): Promise<void> {
+  try {
+    const s = navigator.storage;
+    if (s?.persist && s?.persisted && !(await s.persisted())) await s.persist();
+  } catch {
+    // not supported — nothing to do
+  }
+}
+
+async function checkStorage(): Promise<void> {
+  try {
+    const s = navigator.storage;
+    if (!s?.estimate) return;
+    const { usage, quota } = await s.estimate();
+    storageWarning =
+      usage && quota && usage / quota > 0.85
+        ? 'Storage is almost full. Export a backup so nothing is lost.'
+        : null;
+  } catch {
+    // ignore
+  }
 }
 
 // What the tile editor hands back when you save.
@@ -59,12 +122,15 @@ export interface TileDraft {
   newBoardName?: string;
 }
 
-const initial = load();
-let data = $state<AppData>(initial);
-const initialActive = initial.profiles.find((p) => p.id === initial.activeProfileId) ?? initial.profiles[0];
-let currentBoardId = $state<string>(initialActive.homeId);
+// A synchronous placeholder renders instantly; real data hydrates on boot.
+const placeholder = seedAppData();
+let data = $state<AppData>(placeholder);
+let currentBoardId = $state<string>(placeholder.profiles[0].homeId);
 let utterance = $state<SpokenWord[]>([]);
 let wordSeq = 0;
+let ready = $state(false);
+let saveError = $state(false);
+let storageWarning = $state<string | null>(null);
 
 let editMode = $state(false);
 let editorOpen = $state(false);
@@ -72,7 +138,29 @@ let editorIndex = $state<number | null>(null); // null => creating a new tile
 let profilesOpen = $state(false);
 let settingsOpen = $state(false);
 
+async function boot(): Promise<void> {
+  const loaded = await loadData();
+  data = loaded;
+  const active = loaded.profiles.find((p) => p.id === loaded.activeProfileId) ?? loaded.profiles[0];
+  currentBoardId = active.homeId;
+  ready = true;
+  void requestPersistence();
+  void checkStorage();
+}
+void boot();
+
 export const app = {
+  // ----- storage status -----
+  get ready(): boolean {
+    return ready;
+  },
+  get saveError(): boolean {
+    return saveError;
+  },
+  get storageWarning(): string | null {
+    return storageWarning;
+  },
+
   // ----- profiles -----
   get profiles(): Profile[] {
     return data.profiles;
@@ -300,10 +388,6 @@ export const app = {
   },
 
   persist(): void {
-    try {
-      localStorage.setItem(APP_KEY, JSON.stringify($state.snapshot(data)));
-    } catch {
-      // Storage unavailable (private mode, quota) — edits still work this session.
-    }
+    void writeData($state.snapshot(data));
   },
 };
