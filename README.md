@@ -89,4 +89,5 @@ and survive without any network call.
 - [x] **Voice picker** — per-profile system voice + speaking speed, with a Test button
 - [x] **Category shapes** — a distinct shape per word type (shape-coding) for colorblind/low-vision users; toggleable
 - [x] **Installable & offline** — service worker precaches the app shell; add to a home screen and run with no network
-- [ ] **Profile export/import** — save/load a profile as a single shareable file
+- [x] **Profile export/import** — save/load a profile as a single self-contained JSON file (share sheet on mobile, download on desktop)
+- [ ] **Encrypted cloud backup** — optional end-to-end-encrypted off-device redundancy

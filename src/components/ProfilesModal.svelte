@@ -1,10 +1,14 @@
 <script lang="ts">
   import { app } from '../lib/store.svelte';
+  import type { Profile } from '../lib/types';
+  import { serializeProfile, fileNameForProfile, saveTextFile, parseProfileFile } from '../lib/transfer';
 
   let adding = $state(false);
   let newName = $state('');
   let renamingId = $state<string | null>(null);
   let renameText = $state('');
+  let importError = $state('');
+  let fileInput = $state<HTMLInputElement | null>(null);
 
   function focusField(node: HTMLInputElement) {
     node.focus();
@@ -36,6 +40,31 @@
 
   function boardCount(p: { boards: Record<string, unknown> }): number {
     return Object.keys(p.boards).length;
+  }
+
+  async function exportProfile(p: Profile) {
+    const now = new Date();
+    await saveTextFile(fileNameForProfile(p.name, now), serializeProfile(p, now.toISOString()));
+  }
+  function pickImport() {
+    importError = '';
+    fileInput?.click();
+  }
+  async function onImportFile(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    try {
+      const res = parseProfileFile(await file.text());
+      if (!res.ok || !res.profile) {
+        importError = res.error ?? 'Could not import that file.';
+        return;
+      }
+      app.importProfile(res.profile); // adds, switches, closes the modal
+    } catch {
+      importError = 'Could not read that file.';
+    }
   }
 
   function onKey(e: KeyboardEvent) {
@@ -81,6 +110,7 @@
             {/if}
 
             <div class="pcard-tools">
+              <button class="icon-btn" aria-label={`Export ${p.name}`} onclick={() => exportProfile(p)}>📤</button>
               <button class="icon-btn" aria-label={`Rename ${p.name}`} onclick={() => startRename(p.id, p.name)}>✏️</button>
               {#if app.profiles.length > 1}
                 <button class="icon-btn" aria-label={`Delete ${p.name}`} onclick={() => app.deleteProfile(p.id)}>🗑️</button>
@@ -113,7 +143,17 @@
         {/if}
       </div>
 
+      {#if importError}<p class="picker-note import-error">{importError}</p>{/if}
+
       <div class="modal-actions">
+        <button class="ghost-dark" onclick={pickImport}>⬆️ Import</button>
+        <input
+          type="file"
+          accept="application/json,.json"
+          bind:this={fileInput}
+          onchange={onImportFile}
+          hidden
+        />
         <span class="grow"></span>
         <button class="ghost-dark" onclick={() => app.closeProfiles()}>Close</button>
       </div>

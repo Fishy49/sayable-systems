@@ -348,6 +348,14 @@ export const app = {
     this.persist();
     return p.id;
   },
+  importProfile(profile: Profile): string {
+    // Fresh id so it never collides; repair homeId if it points nowhere.
+    const homeId = profile.boards[profile.homeId] ? profile.homeId : Object.keys(profile.boards)[0];
+    const fresh: Profile = { ...profile, id: uid('p'), homeId };
+    data.profiles.push(fresh);
+    this.switchProfile(fresh.id); // land in it (also persists + closes the modal)
+    return fresh.id;
+  },
   renameProfile(id: string, name: string): void {
     const p = data.profiles.find((x) => x.id === id);
     if (p) {

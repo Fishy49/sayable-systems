@@ -708,6 +708,11 @@ img.sym-img.chip-sym {
   color: var(--ink-soft);
 }
 
+.import-error {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 .attribution {
   margin: 2px 0 0;
   font-size: 0.72rem;
