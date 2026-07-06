@@ -1,9 +1,11 @@
 <script lang="ts">
   import { app } from '../lib/store.svelte';
   import { getVoices, onVoicesChanged, speak } from '../lib/speech';
+  import type { SnapshotMeta } from '../lib/snapshots';
 
   let voices = $state<SpeechSynthesisVoice[]>([]);
   let selected = $state('');
+  let backups = $state<SnapshotMeta[]>([]);
 
   // Load voices (and keep up with their async arrival) while the modal is open.
   $effect(() => {
@@ -46,6 +48,34 @@
   function test() {
     speak('Hi! This is how I sound.', { voiceURI: app.voice.uri, rate: app.voice.rate });
   }
+
+  $effect(() => {
+    if (!app.settingsOpen) return;
+    void refreshBackups();
+  });
+  async function refreshBackups() {
+    backups = await app.listBackups();
+  }
+  async function restore(id: number) {
+    if (confirm('Restore this backup? Your current boards are saved as a backup first.')) {
+      await app.restoreBackup(id);
+    }
+  }
+  async function removeBackup(id: number) {
+    if (confirm('Delete this backup?')) {
+      await app.deleteBackup(id);
+      await refreshBackups();
+    }
+  }
+  function fmtTime(ts: number): string {
+    return new Date(ts).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
+
   function onKey(e: KeyboardEvent) {
     if (e.key === 'Escape') app.closeSettings();
   }
@@ -108,6 +138,30 @@
           onchange={(e) => app.setShowShapes((e.target as HTMLInputElement).checked)}
         />
       </label>
+
+      <div class="field">
+        <span class="field-label">Backups</span>
+        {#if backups.length === 0}
+          <p class="picker-note">No backups yet. One is saved automatically and before big changes.</p>
+        {:else}
+          <div class="backup-list">
+            {#each backups as b (b.id)}
+              <div class="backup-row">
+                <div class="backup-info">
+                  <span class="backup-label">{b.label}</span>
+                  <span class="backup-meta">
+                    {fmtTime(b.ts)} · {b.profiles} profile{b.profiles === 1 ? '' : 's'} · {b.boards} boards
+                  </span>
+                </div>
+                <div class="backup-actions">
+                  <button class="ghost-dark small" onclick={() => restore(b.id)}>Restore</button>
+                  <button class="icon-btn" aria-label="Delete backup" onclick={() => removeBackup(b.id)}>🗑️</button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </div>
 
       <div class="modal-actions">
         <button class="ghost-dark" onclick={test}>▶ Test voice</button>

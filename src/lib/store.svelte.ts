@@ -7,6 +7,15 @@ import { seedBoards } from './seed';
 import { speak } from './speech';
 import { COLORS } from './palette';
 import { idbGet, idbSet } from './idb';
+import {
+  takeSnapshot,
+  listSnapshots,
+  newestValidSnapshot,
+  getSnapshotData,
+  deleteSnapshot,
+  isValidAppData,
+  type SnapshotMeta,
+} from './snapshots';
 
 const APP_KEY = 'sayable.app.v1';
 
@@ -31,9 +40,20 @@ function seedAppData(): AppData {
 async function loadData(): Promise<AppData> {
   try {
     const stored = await idbGet<AppData>(APP_KEY);
-    if (stored && stored.profiles?.length) return stored;
+    if (isValidAppData(stored)) return stored;
   } catch {
-    // IndexedDB unavailable — start fresh (a failed save will surface loudly)
+    // fall through to snapshot recovery
+  }
+  // Main record missing or corrupt → self-heal from the newest good snapshot.
+  try {
+    const recovered = await newestValidSnapshot();
+    if (recovered) {
+      recoveryNotice = `Recovered your boards from a backup (${new Date(recovered.ts).toLocaleString()}).`;
+      await writeData(recovered.data); // repair the live record
+      return recovered.data;
+    }
+  } catch {
+    // ignore and seed
   }
   const seeded = seedAppData();
   await writeData(seeded);
@@ -92,12 +112,25 @@ let wordSeq = 0;
 let ready = $state(false);
 let saveError = $state(false);
 let storageWarning = $state<string | null>(null);
+let recoveryNotice = $state<string | null>(null);
 
 let editMode = $state(false);
 let editorOpen = $state(false);
 let editorIndex = $state<number | null>(null); // null => creating a new tile
 let profilesOpen = $state(false);
 let settingsOpen = $state(false);
+
+async function maybeAutoSnapshot(): Promise<void> {
+  try {
+    const list = await listSnapshots();
+    const hour = 60 * 60 * 1000;
+    if (!list.length || Date.now() - list[0].ts > hour) {
+      await takeSnapshot($state.snapshot(data), 'Automatic');
+    }
+  } catch {
+    // snapshots are best-effort
+  }
+}
 
 async function boot(): Promise<void> {
   const loaded = await loadData();
@@ -107,6 +140,7 @@ async function boot(): Promise<void> {
   ready = true;
   void requestPersistence();
   void checkStorage();
+  void maybeAutoSnapshot();
 }
 void boot();
 
@@ -120,6 +154,12 @@ export const app = {
   },
   get storageWarning(): string | null {
     return storageWarning;
+  },
+  get recoveryNotice(): string | null {
+    return recoveryNotice;
+  },
+  dismissRecovery(): void {
+    recoveryNotice = null;
   },
 
   // ----- profiles -----
@@ -275,6 +315,7 @@ export const app = {
   },
 
   resetToDefaults(): void {
+    void takeSnapshot($state.snapshot(data), 'Before reset');
     const fresh = seedBoards();
     const p = this.activeProfile;
     p.homeId = fresh.homeId;
@@ -318,6 +359,7 @@ export const app = {
     if (data.profiles.length <= 1) return; // always keep at least one
     const idx = data.profiles.findIndex((p) => p.id === id);
     if (idx < 0) return;
+    void takeSnapshot($state.snapshot(data), `Before deleting ${data.profiles[idx].name}`);
     data.profiles.splice(idx, 1);
     if (data.activeProfileId === id) {
       data.activeProfileId = data.profiles[0].id;
@@ -346,6 +388,26 @@ export const app = {
   setShowShapes(on: boolean): void {
     this.activeProfile.showShapes = on;
     this.persist();
+  },
+
+  // ----- backups (local snapshots) -----
+  async listBackups(): Promise<SnapshotMeta[]> {
+    return listSnapshots();
+  },
+  async restoreBackup(id: number): Promise<void> {
+    const restored = await getSnapshotData(id);
+    if (!restored) return;
+    await takeSnapshot($state.snapshot(data), 'Before restore'); // make the restore itself undoable
+    data = restored;
+    const active = restored.profiles.find((p) => p.id === restored.activeProfileId) ?? restored.profiles[0];
+    currentBoardId = active.homeId;
+    editMode = false;
+    this.closeEditor();
+    this.closeSettings();
+    this.persist();
+  },
+  async deleteBackup(id: number): Promise<void> {
+    await deleteSnapshot(id);
   },
 
   persist(): void {

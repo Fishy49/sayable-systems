@@ -47,6 +47,12 @@
       </div>
     </header>
 
+    {#if app.recoveryNotice}
+      <p class="recovery-notice">
+        ℹ️ {app.recoveryNotice}
+        <button class="link-btn" onclick={() => app.dismissRecovery()}>Dismiss</button>
+      </p>
+    {/if}
     {#if app.saveError}
       <p class="save-error">⚠️ Couldn’t save your last change. Open ⚙️ and export a backup so nothing is lost.</p>
     {/if}
