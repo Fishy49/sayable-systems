@@ -12,6 +12,13 @@ export function speechSupported(): boolean {
   return typeof window !== 'undefined' && 'speechSynthesis' in window;
 }
 
+// TTS engines read a lone capital letter by name ("capital I"). Speak such
+// words as a homophone so a button sounds the same tapped alone as it does
+// mid-sentence. Only whole-utterance exact matches are rewritten.
+const SPOKEN_FIXES: Record<string, string> = {
+  I: 'eye',
+};
+
 let cachedVoices: SpeechSynthesisVoice[] = [];
 
 export function getVoices(): SpeechSynthesisVoice[] {
@@ -33,8 +40,9 @@ export function onVoicesChanged(cb: () => void): () => void {
 }
 
 export function speak(text: string, opts: SpeakOptions = {}): void {
-  const phrase = text.trim();
-  if (!phrase || !speechSupported()) return;
+  const trimmed = text.trim();
+  if (!trimmed || !speechSupported()) return;
+  const phrase = SPOKEN_FIXES[trimmed] ?? trimmed;
 
   const synth = window.speechSynthesis;
   // Cancel anything mid-flight so rapid tapping stays snappy.
