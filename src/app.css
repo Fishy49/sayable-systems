@@ -399,7 +399,7 @@ body {
   display: grid;
   grid-template-columns: 1fr;
   gap: 14px;
-  grid-template-areas: 'preview' 'words' 'picture' 'color' 'when';
+  grid-template-areas: 'preview' 'words' 'picture' 'color' 'when' 'advanced';
 }
 
 .field-preview {
@@ -419,6 +419,68 @@ body {
 .field-when {
   grid-area: when;
 }
+.field-advanced {
+  grid-area: advanced;
+  gap: 12px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+/* A quiet, low-emphasis disclosure so the common path stays uncluttered. */
+.adv-toggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+.adv-toggle:hover {
+  color: var(--ink);
+}
+.adv-caret {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  font-size: 0.75rem;
+}
+.adv-caret.open {
+  transform: rotate(90deg);
+}
+.adv-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.adv-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.spoken-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.spoken-row .text-in {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.preview-btn {
+  flex: 0 0 auto;
+}
+.field-hint {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
 
 @media (min-width: 720px) {
   .modal {
@@ -431,7 +493,8 @@ body {
     grid-template-areas:
       'words   preview'
       'picture color'
-      'picture when';
+      'picture when'
+      'advanced advanced';
   }
 }
 

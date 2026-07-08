@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app } from '../lib/store.svelte';
   import { CATEGORIES } from '../lib/palette';
+  import { speak } from '../lib/speech';
   import SymbolPicker from './SymbolPicker.svelte';
   import TileSymbol from './TileSymbol.svelte';
 
@@ -15,6 +16,8 @@
   let actionKind = $state<'speak' | 'goto'>('speak');
   let gotoBoardId = $state('__new__');
   let newBoardName = $state('');
+  let spoken = $state('');
+  let advOpen = $state(false);
 
   let lastKey = '';
   $effect(() => {
@@ -34,6 +37,8 @@
         gotoBoardId = '__new__';
       }
       newBoardName = '';
+      spoken = existing.spoken ?? '';
+      advOpen = !!existing.spoken?.trim(); // auto-reveal if this tile already has an override
     } else {
       text = '';
       symbol = '⭐';
@@ -41,11 +46,18 @@
       actionKind = 'speak';
       gotoBoardId = '__new__';
       newBoardName = '';
+      spoken = '';
+      advOpen = false;
     }
   });
 
   function save() {
-    app.commitTile({ text, symbol, bg, actionKind, gotoBoardId, newBoardName });
+    app.commitTile({ text, symbol, bg, actionKind, gotoBoardId, newBoardName, spoken });
+  }
+
+  function previewSpoken() {
+    const phrase = spoken.trim() || text.trim();
+    if (phrase) speak(phrase, { voiceURI: app.voice.uri, rate: app.voice.rate });
   }
 
   function onKey(e: KeyboardEvent) {
@@ -126,6 +138,34 @@
             {/if}
           {/if}
         </div>
+
+        {#if actionKind === 'speak'}
+          <div class="field field-advanced">
+            <button
+              type="button"
+              class="adv-toggle"
+              aria-expanded={advOpen}
+              onclick={() => (advOpen = !advOpen)}
+            >
+              <span class="adv-caret" class:open={advOpen} aria-hidden="true">▸</span>
+              Advanced
+              {#if !advOpen && spoken.trim()}<span class="adv-dot" aria-hidden="true"></span>{/if}
+            </button>
+
+            {#if advOpen}
+              <div class="adv-body">
+                <span class="field-label">Spoken words</span>
+                <div class="spoken-row">
+                  <input class="text-in" bind:value={spoken} placeholder={text.trim() || 'Same as the words above'} />
+                  <button type="button" class="icon-btn preview-btn" aria-label="Hear it" onclick={previewSpoken}>🔊</button>
+                </div>
+                <span class="field-hint">
+                  What the tile actually says. Leave blank to speak the words shown on the tile.
+                </span>
+              </div>
+            {/if}
+          </div>
+        {/if}
       </div>
 
       <div class="modal-actions">

@@ -10,10 +10,11 @@ export type TileAction =
 
 export interface Tile {
   id: string;
-  text: string; // the word or phrase to speak
+  text: string; // the word or phrase shown on the tile
   symbol: string; // an emoji glyph, or an image (URL / data URL)
   bg: string; // tile background color (hex)
   action: TileAction;
+  spoken?: string; // advanced: what to SAY, if different from the displayed text
 }
 
 export interface Board {
@@ -50,6 +51,7 @@ export interface AppData {
 // One entry in the sentence the communicator is building.
 export interface SpokenWord {
   id: string;
-  text: string;
+  text: string; // what shows in the sentence bar
   symbol: string;
+  spoken?: string; // what to actually speak on readback, if it differs from text
 }

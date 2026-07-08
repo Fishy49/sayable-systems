@@ -19,6 +19,11 @@ import {
 
 const APP_KEY = 'sayable.app.v1';
 
+// What a tile actually says: its spoken override if set, else its displayed text.
+function spokenText(t: { text: string; spoken?: string }): string {
+  return t.spoken?.trim() || t.text;
+}
+
 function uid(prefix = 't'): string {
   const c = globalThis.crypto;
   if (c && 'randomUUID' in c) return `${prefix}_${c.randomUUID().slice(0, 8)}`;
@@ -101,6 +106,7 @@ export interface TileDraft {
   actionKind: 'speak' | 'goto';
   gotoBoardId?: string; // an existing board id, or '__new__'
   newBoardName?: string;
+  spoken?: string; // advanced: spoken override; blank means "same as text"
 }
 
 // A synchronous placeholder renders instantly; real data hydrates on boot.
@@ -218,8 +224,11 @@ export const app = {
       this.openBoard(tile.action.boardId);
       return;
     }
-    utterance = [...utterance, { id: `w${++wordSeq}`, text: tile.text, symbol: tile.symbol }];
-    speak(tile.text, { voiceURI: this.voice.uri, rate: this.voice.rate });
+    utterance = [
+      ...utterance,
+      { id: `w${++wordSeq}`, text: tile.text, symbol: tile.symbol, spoken: tile.spoken },
+    ];
+    speak(spokenText(tile), { voiceURI: this.voice.uri, rate: this.voice.rate });
   },
   openBoard(boardId: string): void {
     if (this.activeProfile.boards[boardId]) currentBoardId = boardId;
@@ -228,7 +237,10 @@ export const app = {
     currentBoardId = this.activeProfile.homeId;
   },
   speakAll(): void {
-    speak(this.sentence, { voiceURI: this.voice.uri, rate: this.voice.rate });
+    // Read back using each word's spoken override, so a tile sounds the same
+    // in a sentence as it does tapped alone.
+    const phrase = utterance.map(spokenText).join(' ');
+    speak(phrase, { voiceURI: this.voice.uri, rate: this.voice.rate });
   },
   backspace(): void {
     utterance = utterance.slice(0, -1);
@@ -270,8 +282,9 @@ export const app = {
     }
 
     const text = draft.text.trim() || draft.symbol;
+    const spoken = draft.spoken?.trim() || undefined; // store nothing when it matches the label
     if (editorIndex === null) {
-      this.board.tiles.push({ id: uid(), text, symbol: draft.symbol, bg: draft.bg, action });
+      this.board.tiles.push({ id: uid(), text, symbol: draft.symbol, bg: draft.bg, action, spoken });
     } else {
       const t = this.board.tiles[editorIndex];
       if (t) {
@@ -279,6 +292,7 @@ export const app = {
         t.symbol = draft.symbol;
         t.bg = draft.bg;
         t.action = action;
+        t.spoken = spoken;
       }
     }
     this.persist();
