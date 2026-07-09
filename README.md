@@ -19,14 +19,6 @@ reaction to that: built around **one person**, runs **entirely in the browser**,
 - **Data is local** — boards live on the device.
 - **Installable** — a small PWA you can add to a tablet's home screen.
 
-## Heritage & licensing
-
-Sayable was **inspired by** the open-source []()
-project — specifically the *idea* that an AAC board is a grid of buttons that
-either speak or navigate. **No  code, text, or assets were copied.**
-Different language, different framework, different data model, written from
-scratch.
-
 ## Stack
 
 - [Svelte 5](https://svelte.dev) (runes) + [Vite](https://vitejs.dev) + TypeScript

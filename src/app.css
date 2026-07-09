@@ -299,6 +299,28 @@ body {
   max-width: 100%;
 }
 
+/* Narrow phones (portrait): the authored wide grid squeezes tiles to postage
+   stamps. Reflow to a few big columns and let the board scroll vertically.
+   This trades fixed tile positions for legibility, a deliberate choice on
+   small screens; larger screens keep the authored layout above. */
+@media (max-width: 600px) {
+  .board-area {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .grid {
+    height: auto;
+    min-height: 100%;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+    align-content: start;
+  }
+  .tile {
+    aspect-ratio: 1 / 1;
+  }
+}
+
 /* ---------- folder identity ---------- */
 .tile.folder {
   overflow: visible;
