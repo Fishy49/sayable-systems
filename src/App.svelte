@@ -8,6 +8,9 @@
   import SettingsModal from './components/SettingsModal.svelte';
 
   const noSpeech = !speechSupported();
+  // Base-aware so the icon resolves under a sub-path deploy (e.g. /app/), not
+  // just at the site root. import.meta.env.BASE_URL ends with a slash.
+  const iconUrl = `${import.meta.env.BASE_URL}icon.svg`;
 
   function confirmReset() {
     if (confirm('Reset all boards back to the starter set? This erases your changes.')) {
@@ -18,14 +21,14 @@
 
 {#if !app.ready}
   <div class="splash">
-    <img src="/icon.svg" alt="" width="72" height="72" />
+    <img src={iconUrl} alt="" width="72" height="72" />
     <span>Sayable</span>
   </div>
 {:else}
   <div class="app" class:edit-mode={app.editMode}>
     <header class="topbar">
       <div class="brand">
-        <img class="logo" src="/icon.svg" alt="" width="26" height="26" />
+        <img class="logo" src={iconUrl} alt="" width="26" height="26" />
         <span>Sayable</span>
       </div>
       <div class="crumb">{app.board.name}</div>
