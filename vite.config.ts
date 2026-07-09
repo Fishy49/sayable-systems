@@ -5,7 +5,14 @@ import { VitePWA } from 'vite-plugin-pwa';
 // Sayable is a static, client-only SPA — no backend, no server-side anything.
 // The service worker precaches the whole app shell so it runs fully offline
 // and can be installed to a home screen.
+//
+// SAYABLE_BASE lets the same build target a sub-path deploy — e.g. the
+// sayable.systems landing site hosts the app at /app/ via
+// `SAYABLE_BASE=/app/ npm run build`. Defaults to a root deploy.
+const base = process.env.SAYABLE_BASE ?? '/';
+
 export default defineConfig({
+  base,
   plugins: [
     svelte(),
     VitePWA({
@@ -16,8 +23,8 @@ export default defineConfig({
         name: 'Sayable',
         short_name: 'Sayable',
         description: 'A simple, fast communication board.',
-        start_url: '/',
-        scope: '/',
+        start_url: base,
+        scope: base,
         display: 'standalone',
         orientation: 'any',
         background_color: '#0f172a',
@@ -31,7 +38,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
-        navigateFallback: '/index.html',
+        navigateFallback: `${base}index.html`,
         cleanupOutdatedCaches: true,
       },
     }),
