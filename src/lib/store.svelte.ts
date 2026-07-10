@@ -126,6 +126,29 @@ let editorIndex = $state<number | null>(null); // null => creating a new tile
 let profilesOpen = $state(false);
 let settingsOpen = $state(false);
 
+// TEMP DIAGNOSTIC (enable with ?debug): writes a running action log straight to
+// the DOM, bypassing the reactive layer, so we can see whether taps reach the
+// handlers on a device where the modal misbehaves. Remove once diagnosed.
+const DEBUG = typeof location !== 'undefined' && /[?&]debug/.test(location.search);
+let dbgN = 0;
+const dbgHist: string[] = [];
+function dbg(action: string): void {
+  if (!DEBUG || typeof document === 'undefined') return;
+  dbgN += 1;
+  dbgHist.push(`${dbgN}: ${action}  [sO=${settingsOpen} pO=${profilesOpen} edit=${editMode}]`);
+  while (dbgHist.length > 7) dbgHist.shift();
+  let el = document.getElementById('sayable-dbg');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'sayable-dbg';
+    el.style.cssText =
+      'position:fixed;left:0;bottom:0;z-index:99999;max-width:100vw;background:#000;color:#3f3;' +
+      'font:11px/1.35 monospace;padding:4px 8px;white-space:pre-wrap;pointer-events:none;';
+    document.body.appendChild(el);
+  }
+  el.textContent = dbgHist.join('\n');
+}
+
 async function maybeAutoSnapshot(): Promise<void> {
   try {
     const list = await listSnapshots();
@@ -252,6 +275,7 @@ export const app = {
   toggleEdit(): void {
     editMode = !editMode;
     if (!editMode) this.closeEditor();
+    dbg('toggleEdit()');
   },
   openEditor(index: number | null): void {
     editorIndex = index;
@@ -343,6 +367,7 @@ export const app = {
   // ----- profile switcher -----
   openProfiles(): void {
     profilesOpen = true;
+    dbg('openProfiles()');
   },
   closeProfiles(): void {
     profilesOpen = false;
@@ -393,9 +418,11 @@ export const app = {
   // ----- settings (per active profile) -----
   openSettings(): void {
     settingsOpen = true;
+    dbg('openSettings()');
   },
   closeSettings(): void {
     settingsOpen = false;
+    dbg('closeSettings()');
   },
   setVoiceURI(uri: string | null): void {
     const p = this.activeProfile;
