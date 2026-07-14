@@ -77,7 +77,32 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') app.closeSettings();
+    // The PIN pad sits above this modal and handles its own Escape.
+    if (e.key === 'Escape' && !app.pinSetupOpen) app.closeSettings();
+  }
+
+  function removeLock() {
+    if (confirm('Remove the caregiver lock?')) app.removePin();
+  }
+
+  // Fullscreen is per-tap browser state, not persisted data, so it lives here.
+  const fsSupported = typeof document !== 'undefined' && !!document.documentElement.requestFullscreen;
+  let isFullscreen = $state(false);
+  $effect(() => {
+    const sync = () => {
+      isFullscreen = !!document.fullscreenElement;
+    };
+    sync();
+    document.addEventListener('fullscreenchange', sync);
+    return () => document.removeEventListener('fullscreenchange', sync);
+  });
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch {
+      // blocked by the browser — nothing sensible to do
+    }
   }
 </script>
 
@@ -138,6 +163,36 @@
           onchange={(e) => app.setShowShapes((e.target as HTMLInputElement).checked)}
         />
       </label>
+
+      <div class="field">
+        <span class="field-label">Caregiver lock</span>
+        {#if app.lockEnabled}
+          <p class="picker-note">
+            Editing, settings, and profiles ask for your PIN. Tap 🔓 in the top bar to lock now.
+          </p>
+          <div class="lock-actions">
+            <button class="ghost-dark small" onclick={() => app.openPinSetup()}>Change PIN</button>
+            <button class="ghost-dark small" onclick={removeLock}>Remove lock</button>
+          </div>
+        {:else}
+          <p class="picker-note">Set a 4-digit PIN so only grown-ups can edit boards or change settings.</p>
+          <div class="lock-actions">
+            <button class="ghost-dark small" onclick={() => app.openPinSetup()}>Set PIN</button>
+          </div>
+        {/if}
+      </div>
+
+      {#if fsSupported}
+        <div class="field">
+          <span class="field-label">Display</span>
+          <div class="lock-actions">
+            <button class="ghost-dark small" onclick={toggleFullscreen}>
+              {isFullscreen ? '⛶ Exit fullscreen' : '⛶ Go fullscreen'}
+            </button>
+          </div>
+          <p class="picker-note">Hides the browser bars for a cleaner talking screen.</p>
+        </div>
+      {/if}
 
       <div class="field">
         <span class="field-label">Backups</span>

@@ -46,6 +46,10 @@ export interface AppData {
   version: number;
   activeProfileId: string;
   profiles: Profile[];
+  // Caregiver lock: hash of a 4-digit PIN. When set, editing/settings/profiles
+  // ask for the PIN. App-level on purpose — the lock belongs to the device,
+  // so it never travels with an exported profile.
+  lockPin?: string;
 }
 
 // One entry in the sentence the communicator is building.

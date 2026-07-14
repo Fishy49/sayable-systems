@@ -126,6 +126,27 @@ let editorIndex = $state<number | null>(null); // null => creating a new tile
 let profilesOpen = $state(false);
 let settingsOpen = $state(false);
 
+// ---- caregiver lock ----
+// The PIN gates the caregiver surface (edit / settings / profiles). Unlock
+// lasts for the session only — a reload or the topbar lock button re-arms it.
+export type PendingLockAction = 'settings' | 'profiles' | 'edit';
+let unlockedThisSession = $state(false);
+let pinPromptOpen = $state(false);
+let pinSetupOpen = $state(false);
+let pendingAction: PendingLockAction | null = null;
+
+// A child lock, not cryptography: hashing just keeps the PIN from sitting in
+// IndexedDB as plain text. crypto.subtle needs a secure context (https or
+// localhost); anywhere else, fall back to a marked plain value.
+async function hashPin(pin: string): Promise<string> {
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`sayable:${pin}`));
+    return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return `plain:${pin}`;
+  }
+}
+
 // TEMP DIAGNOSTIC (enable with ?debug): writes a running action log straight to
 // the DOM, bypassing the reactive layer, so we can see whether taps reach the
 // handlers on a device where the modal misbehaves. Remove once diagnosed.
@@ -273,6 +294,10 @@ export const app = {
   },
 
   toggleEdit(): void {
+    if (this.locked) {
+      this.requestUnlock('edit');
+      return;
+    }
     editMode = !editMode;
     if (!editMode) this.closeEditor();
     dbg('toggleEdit()');
@@ -366,6 +391,10 @@ export const app = {
 
   // ----- profile switcher -----
   openProfiles(): void {
+    if (this.locked) {
+      this.requestUnlock('profiles');
+      return;
+    }
     profilesOpen = true;
     dbg('openProfiles()');
   },
@@ -417,6 +446,10 @@ export const app = {
 
   // ----- settings (per active profile) -----
   openSettings(): void {
+    if (this.locked) {
+      this.requestUnlock('settings');
+      return;
+    }
     settingsOpen = true;
     dbg('openSettings()');
   },
@@ -457,6 +490,63 @@ export const app = {
   },
   async deleteBackup(id: number): Promise<void> {
     await deleteSnapshot(id);
+  },
+
+  // ----- caregiver lock -----
+  get lockEnabled(): boolean {
+    return !!data.lockPin;
+  },
+  get locked(): boolean {
+    return !!data.lockPin && !unlockedThisSession;
+  },
+  get pinPromptOpen(): boolean {
+    return pinPromptOpen;
+  },
+  get pinSetupOpen(): boolean {
+    return pinSetupOpen;
+  },
+  requestUnlock(action: PendingLockAction): void {
+    pendingAction = action;
+    pinPromptOpen = true;
+  },
+  cancelPin(): void {
+    pinPromptOpen = false;
+    pinSetupOpen = false;
+    pendingAction = null;
+  },
+  async tryUnlock(pin: string): Promise<boolean> {
+    if (!data.lockPin || (await hashPin(pin)) !== data.lockPin) return false;
+    unlockedThisSession = true;
+    pinPromptOpen = false;
+    const action = pendingAction;
+    pendingAction = null;
+    // Continue to wherever the caregiver was headed when the PIN pad appeared.
+    if (action === 'settings') this.openSettings();
+    else if (action === 'profiles') this.openProfiles();
+    else if (action === 'edit') this.toggleEdit();
+    return true;
+  },
+  openPinSetup(): void {
+    pinSetupOpen = true;
+  },
+  async setPin(pin: string): Promise<void> {
+    data.lockPin = await hashPin(pin);
+    unlockedThisSession = true; // never lock out the person who just set it
+    pinSetupOpen = false;
+    this.persist();
+  },
+  removePin(): void {
+    delete data.lockPin;
+    unlockedThisSession = false;
+    this.persist();
+  },
+  relock(): void {
+    unlockedThisSession = false;
+    // Hand-back safety: leave no caregiver surface open behind the lock.
+    editMode = false;
+    this.closeEditor();
+    this.closeSettings();
+    this.closeProfiles();
   },
 
   persist(): void {

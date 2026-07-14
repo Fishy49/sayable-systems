@@ -1138,3 +1138,69 @@ img.sym-img.chip-sym {
     transform: none;
   }
 }
+
+/* Caregiver lock — the PIN pad and its settings row. */
+.pin-modal {
+  max-width: 320px;
+  align-items: center;
+  text-align: center;
+}
+
+.pin-dots {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  padding: 6px 0 2px;
+}
+
+.pin-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+}
+
+.pin-dot.filled {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.pin-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 76px);
+  gap: 10px;
+  justify-content: center;
+}
+
+.pin-key {
+  height: 64px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1.4rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pin-key:active {
+  transform: scale(0.96);
+}
+
+.pin-key.ghosted {
+  background: transparent;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.lock-actions {
+  display: flex;
+  gap: 8px;
+}

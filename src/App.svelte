@@ -6,6 +6,7 @@
   import TileEditor from './components/TileEditor.svelte';
   import ProfilesModal from './components/ProfilesModal.svelte';
   import SettingsModal from './components/SettingsModal.svelte';
+  import PinModal from './components/PinModal.svelte';
 
   const noSpeech = !speechSupported();
   // Base-aware so the icon resolves under a sub-path deploy (e.g. /app/), not
@@ -33,6 +34,9 @@
       </div>
       <div class="crumb">{app.board.name}</div>
       <div class="top-actions">
+        {#if app.lockEnabled && !app.locked}
+          <button class="ghost icon-only" onclick={() => app.relock()} aria-label="Lock caregiver controls">🔓</button>
+        {/if}
         <button class="ghost profile-chip" onclick={() => app.openProfiles()} aria-label="Switch profile">
           <span aria-hidden="true">👤</span>
           <span class="pchip-name">{app.activeProfile.name}</span>
@@ -82,4 +86,5 @@
   <TileEditor />
   <ProfilesModal />
   <SettingsModal />
+  <PinModal />
 {/if}
