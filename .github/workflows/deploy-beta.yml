@@ -1,0 +1,45 @@
+# Beta channel: every push to main deploys to the repo's GitHub Pages at
+# https://fishy49.github.io/sayable-systems/ — a separate origin from the
+# production deploy (sayable.systems/app/), so storage, service worker, and
+# PWA install are fully isolated. Production remains the manual copy of a
+# `SAYABLE_BASE=/app/` build into the sayable.systems repo.
+name: Deploy beta to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: SAYABLE_BASE=/sayable-systems/ npm run build
+      # Beta-only extras: the TTS benchmark page never enters the app build,
+      # so it can't leak into a production deploy.
+      - run: cp -r bench dist/bench
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

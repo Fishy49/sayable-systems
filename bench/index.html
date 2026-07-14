@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sayable · Piper TTS device benchmark</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px; background: #0f172a; color: #e2e8f0;
+    font: 16px/1.5 system-ui, sans-serif; max-width: 720px; margin-inline: auto;
+  }
+  h1 { font-size: 1.25rem; margin: 0 0 4px; }
+  .sub { color: #94a3b8; font-size: 0.85rem; margin-bottom: 16px; }
+  section { background: #1e293b; border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+  section h2 { font-size: 0.95rem; margin: 0 0 10px; color: #7dd3fc; }
+  button {
+    font: inherit; padding: 12px 18px; border: 0; border-radius: 10px;
+    background: #0ea5e9; color: #082f49; font-weight: 600; margin: 4px 6px 4px 0;
+    min-height: 48px; cursor: pointer;
+  }
+  button.secondary { background: #334155; color: #e2e8f0; }
+  button:disabled { opacity: 0.4; }
+  select {
+    font: inherit; padding: 10px; border-radius: 8px; background: #0f172a;
+    color: #e2e8f0; border: 1px solid #334155; max-width: 100%; margin: 4px 0;
+  }
+  progress { width: 100%; height: 10px; }
+  #log {
+    background: #020617; border-radius: 10px; padding: 12px; font: 13px/1.5 ui-monospace, monospace;
+    white-space: pre-wrap; word-break: break-word; min-height: 120px; max-height: 45vh; overflow-y: auto;
+  }
+  #log .err { color: #f87171; }
+  #log .ok { color: #4ade80; }
+  #log .play {
+    min-height: 28px; padding: 2px 10px; margin: 0 0 0 8px; font-size: 12px;
+    background: #334155; color: #e2e8f0; vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+  <h1>Piper TTS device benchmark</h1>
+  <div class="sub">
+    Measures in-browser neural TTS (Piper via WASM) on THIS device.
+    Engine loads from CDN, voice model (~63&nbsp;MB) from HuggingFace into browser storage.
+    Throwaway test page — not part of the Sayable app.
+  </div>
+
+  <section>
+    <h2>1 · Voice</h2>
+    <select id="voice"></select>
+    <div><button id="download">Download voice</button>
+    <button id="clear" class="secondary">Clear stored voices</button></div>
+    <progress id="prog" max="100" value="0" hidden></progress>
+  </section>
+
+  <section>
+    <h2>2 · Benchmark</h2>
+    <button id="bench" disabled>Run benchmark</button>
+    <div class="sub">Runs 4 syntheses: short (cold, includes engine init), short (warm), medium, long. Each result gets a ▶ to hear it.</div>
+  </section>
+
+  <section>
+    <h2>3 · Compare: system voice (Web Speech API)</h2>
+    <select id="sysvoice"></select>
+    <div><button id="sysspeak" class="secondary">Speak same sentence with system voice</button></div>
+  </section>
+
+  <div id="log">Loading engine module…</div>
+
+<script type="module">
+  const $ = (id) => document.getElementById(id);
+  const log = (msg, cls) => {
+    const line = document.createElement('div');
+    if (cls) line.className = cls;
+    line.textContent = msg;
+    $('log').appendChild(line);
+    $('log').scrollTop = $('log').scrollHeight;
+    return line;
+  };
+  const mem = () => {
+    const m = performance.memory;
+    return m ? ` · JS heap ${(m.usedJSHeapSize / 1048576).toFixed(0)} MB` : '';
+  };
+
+  const SENTENCES = [
+    'I want to go outside please.',
+    'Can we have pizza for dinner tonight? I would really like that.',
+    'Tomorrow morning we are going to the park with grandma, and after lunch I want to watch my favorite movie and have popcorn.',
+  ];
+
+  // ---- Web Speech comparison (independent of Piper) ----
+  const fillSys = () => {
+    const sel = $('sysvoice');
+    sel.innerHTML = '';
+    for (const v of speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en'))) {
+      const o = document.createElement('option');
+      o.value = v.voiceURI;
+      o.textContent = `${v.name} (${v.lang})${v.localService ? '' : ' · online'}`;
+      sel.appendChild(o);
+    }
+  };
+  fillSys();
+  speechSynthesis.addEventListener?.('voiceschanged', fillSys);
+  $('sysspeak').onclick = () => {
+    const u = new SpeechSynthesisUtterance(SENTENCES[1]);
+    const v = speechSynthesis.getVoices().find((v) => v.voiceURI === $('sysvoice').value);
+    if (v) u.voice = v;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  };
+
+  // ---- Piper via vits-web ----
+  let tts;
+  const FALLBACK_VOICES = [
+    'en_US-ljspeech-medium', 'en_US-kristin-medium',
+    'en_US-libritts_r-medium', 'en_US-hfc_female-medium',
+  ];
+  try {
+    tts = await import('https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/+esm');
+    log(`Engine module loaded. UA: ${navigator.userAgent}`, 'ok');
+    log(`Cores: ${navigator.hardwareConcurrency ?? '?'} · RAM (approx): ${navigator.deviceMemory ?? '?'} GB${mem()}`);
+  } catch (e) {
+    log(`FAILED to load engine module: ${e.message}`, 'err');
+  }
+
+  const voiceSel = $('voice');
+  const fillVoices = async () => {
+    let ids = FALLBACK_VOICES;
+    try {
+      const all = await tts.voices();
+      const en = all.map((v) => v.key ?? v.id ?? v).filter((k) => typeof k === 'string' && k.startsWith('en_'));
+      if (en.length) ids = en;
+    } catch (e) {
+      log(`voices() failed (${e.message}) — using fallback list`, 'err');
+    }
+    for (const id of ids) {
+      const o = document.createElement('option');
+      o.value = o.textContent = id;
+      voiceSel.appendChild(o);
+    }
+    const pref = ids.find((i) => i.includes('ljspeech-medium'));
+    if (pref) voiceSel.value = pref;
+    try {
+      const have = await tts.stored();
+      if (have.length) {
+        log(`Already stored: ${have.join(', ')}`, 'ok');
+        $('bench').disabled = false;
+      }
+    } catch {}
+  };
+  if (tts) fillVoices();
+
+  $('download').onclick = async () => {
+    const id = voiceSel.value;
+    $('download').disabled = true;
+    $('prog').hidden = false;
+    const t0 = performance.now();
+    try {
+      await tts.download(id, (p) => {
+        if (p.total) $('prog').value = (p.loaded / p.total) * 100;
+      });
+      const secs = ((performance.now() - t0) / 1000).toFixed(1);
+      log(`Downloaded ${id} in ${secs} s`, 'ok');
+      $('bench').disabled = false;
+    } catch (e) {
+      log(`Download failed: ${e.message}`, 'err');
+    }
+    $('download').disabled = false;
+    $('prog').hidden = true;
+  };
+
+  $('clear').onclick = async () => {
+    try {
+      await tts.flush();
+      log('Stored voices cleared.', 'ok');
+      $('bench').disabled = true;
+    } catch (e) {
+      log(`Clear failed: ${e.message}`, 'err');
+    }
+  };
+
+  const audioDuration = async (blob) => {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
+    ctx.close();
+    return buf.duration;
+  };
+
+  const runOne = async (label, text, voiceId) => {
+    const t0 = performance.now();
+    const wav = await tts.predict({ text, voiceId });
+    const ms = performance.now() - t0;
+    const dur = await audioDuration(wav);
+    const rtf = dur / (ms / 1000);
+    const line = log(`${label}: synth ${ms.toFixed(0)} ms · audio ${dur.toFixed(1)} s · ${rtf.toFixed(1)}x realtime${mem()}`,
+      rtf >= 1 ? 'ok' : 'err');
+    const btn = document.createElement('button');
+    btn.className = 'play';
+    btn.textContent = '▶';
+    btn.onclick = () => new Audio(URL.createObjectURL(wav)).play();
+    line.appendChild(btn);
+    return rtf;
+  };
+
+  $('bench').onclick = async () => {
+    const id = voiceSel.value;
+    $('bench').disabled = true;
+    log(`--- Benchmark: ${id} ---`);
+    try {
+      const rtfs = [];
+      rtfs.push(await runOne('short/COLD', SENTENCES[0], id));
+      rtfs.push(await runOne('short/warm', SENTENCES[0], id));
+      rtfs.push(await runOne('medium   ', SENTENCES[1], id));
+      rtfs.push(await runOne('long     ', SENTENCES[2], id));
+      const warm = rtfs.slice(1);
+      const avg = warm.reduce((a, b) => a + b, 0) / warm.length;
+      log(`SUMMARY: warm average ${avg.toFixed(1)}x realtime — ${avg >= 2 ? 'plenty for AAC'
+        : avg >= 1 ? 'usable for short utterances' : 'TOO SLOW on this device'}`, avg >= 1 ? 'ok' : 'err');
+    } catch (e) {
+      log(`Benchmark failed: ${e.message}`, 'err');
+    }
+    $('bench').disabled = false;
+  };
+</script>
+</body>
+</html>

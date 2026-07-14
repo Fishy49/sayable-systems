@@ -39,6 +39,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
         navigateFallback: `${base}index.html`,
+        // /bench/ is a standalone page copied into the beta deploy after the
+        // build; keep the SPA fallback from hijacking navigations to it.
+        navigateFallbackDenylist: [/\/bench\//],
         cleanupOutdatedCaches: true,
       },
     }),
