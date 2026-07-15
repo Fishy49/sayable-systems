@@ -1204,3 +1204,12 @@ img.sym-img.chip-sym {
   display: flex;
   gap: 8px;
 }
+
+/* The "OBF" export chip in the profile card tools — a text button sized to
+   sit alongside the icon buttons without shouting. */
+.obf-chip {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--ink-soft);
+}

@@ -61,7 +61,15 @@ export function parseProfileFile(text: string): ParseResult {
  * Mail, etc. — and falls back to a plain download link on desktop.
  */
 export async function saveTextFile(filename: string, text: string, mime = 'application/json'): Promise<void> {
-  const blob = new Blob([text], { type: mime });
+  return saveBlobFile(filename, new Blob([text], { type: mime }), mime);
+}
+
+/** Save arbitrary bytes (e.g. an .obz ZIP), share-sheet first like saveTextFile. */
+export async function saveBinaryFile(filename: string, bytes: Uint8Array, mime: string): Promise<void> {
+  return saveBlobFile(filename, new Blob([bytes as BlobPart], { type: mime }), mime);
+}
+
+async function saveBlobFile(filename: string, blob: Blob, mime: string): Promise<void> {
   try {
     const file = new File([blob], filename, { type: mime });
     if (navigator.canShare?.({ files: [file] }) && navigator.share) {

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { app } from '../lib/store.svelte';
   import type { Profile } from '../lib/types';
-  import { serializeProfile, fileNameForProfile, saveTextFile, parseProfileFile } from '../lib/transfer';
+  import { serializeProfile, fileNameForProfile, saveTextFile, saveBinaryFile, parseProfileFile } from '../lib/transfer';
+  import { profileToObz, obzFileName, obzToProfile, singleObfTextToProfile, looksLikeObf } from '../lib/obf';
 
   let adding = $state(false);
   let newName = $state('');
@@ -46,17 +47,37 @@
     const now = new Date();
     await saveTextFile(fileNameForProfile(p.name, now), serializeProfile(p, now.toISOString()));
   }
+  async function exportProfileObf(p: Profile) {
+    const bytes = await profileToObz(p);
+    await saveBinaryFile(obzFileName(p.name, new Date()), bytes, 'application/zip');
+  }
   function pickImport() {
     importError = '';
     fileInput?.click();
   }
+  // Accepts a Sayable backup (.json), a single Open Board (.obf), or an Open
+  // Board set (.obz, a ZIP) — sniffed by content, not extension.
   async function onImportFile(e: Event) {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
+    importError = '';
     try {
-      const res = parseProfileFile(await file.text());
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let res;
+      if (buf[0] === 0x50 && buf[1] === 0x4b) {
+        res = await obzToProfile(buf); // 'PK' magic → a ZIP → .obz
+      } else {
+        const text = new TextDecoder().decode(buf);
+        let obj: unknown = null;
+        try {
+          obj = JSON.parse(text);
+        } catch {
+          // leave obj null; parseProfileFile will report the JSON error
+        }
+        res = looksLikeObf(obj) ? await singleObfTextToProfile(text) : parseProfileFile(text);
+      }
       if (!res.ok || !res.profile) {
         importError = res.error ?? 'Could not import that file.';
         return;
@@ -110,7 +131,8 @@
             {/if}
 
             <div class="pcard-tools">
-              <button class="icon-btn" aria-label={`Export ${p.name}`} onclick={() => exportProfile(p)}>📤</button>
+              <button class="icon-btn" aria-label={`Back up ${p.name}`} title="Save a Sayable backup (.json)" onclick={() => exportProfile(p)}>📤</button>
+              <button class="icon-btn obf-chip" aria-label={`Export ${p.name} as Open Board Format`} title="Export as Open Board Format (.obz) — for other AAC apps" onclick={() => exportProfileObf(p)}>OBF</button>
               <button class="icon-btn" aria-label={`Rename ${p.name}`} onclick={() => startRename(p.id, p.name)}>✏️</button>
               {#if app.profiles.length > 1}
                 <button class="icon-btn" aria-label={`Delete ${p.name}`} onclick={() => app.deleteProfile(p.id)}>🗑️</button>
@@ -146,10 +168,10 @@
       {#if importError}<p class="picker-note import-error">{importError}</p>{/if}
 
       <div class="modal-actions">
-        <button class="ghost-dark" onclick={pickImport}>⬆️ Import</button>
+        <button class="ghost-dark" onclick={pickImport} title="Import a Sayable backup, .obf, or .obz">⬆️ Import</button>
         <input
           type="file"
-          accept="application/json,.json"
+          accept=".json,.obf,.obz,application/json,application/zip"
           bind:this={fileInput}
           onchange={onImportFile}
           hidden
