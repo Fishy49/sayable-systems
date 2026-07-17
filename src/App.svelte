@@ -7,11 +7,22 @@
   import ProfilesModal from './components/ProfilesModal.svelte';
   import SettingsModal from './components/SettingsModal.svelte';
   import PinModal from './components/PinModal.svelte';
+  import { pwa } from './lib/pwa.svelte';
 
   const noSpeech = !speechSupported();
   // Base-aware so the icon resolves under a sub-path deploy (e.g. /app/), not
   // just at the site root. import.meta.env.BASE_URL ends with a slash.
   const iconUrl = `${import.meta.env.BASE_URL}icon.svg`;
+
+  // Lock body scroll while any modal is open. On mobile browser tabs this keeps
+  // the page from scrolling behind the modal and stops Chrome's address bar from
+  // showing/hiding mid-interaction — which desyncs fixed-position hit-testing and
+  // can leave top-bar buttons unresponsive until an unrelated tap forces a reflow.
+  $effect(() => {
+    const anyModal =
+      app.settingsOpen || app.profilesOpen || app.editorOpen || app.pinPromptOpen || app.pinSetupOpen;
+    document.documentElement.classList.toggle('modal-open', anyModal);
+  });
 
   function confirmReset() {
     if (confirm('Reset all boards back to the starter set? This erases your changes.')) {
@@ -54,6 +65,12 @@
       </div>
     </header>
 
+    {#if pwa.updateReady}
+      <p class="update-notice">
+        ✨ A new version of Sayable is ready.
+        <button class="link-btn" onclick={() => pwa.applyUpdate()}>Reload</button>
+      </p>
+    {/if}
     {#if app.recoveryNotice}
       <p class="recovery-notice">
         ℹ️ {app.recoveryNotice}

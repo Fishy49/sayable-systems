@@ -1069,6 +1069,27 @@ img.sym-img.chip-sym {
   border-bottom: 1px solid #bae6fd;
 }
 
+/* Service-worker "new version ready" banner — same shape as the recovery
+   notice, tinted to read as a positive/neutral nudge rather than a warning. */
+.update-notice {
+  margin: 0;
+  padding: 9px 14px;
+  background: #ecfccb;
+  color: #3f6212;
+  font-size: 0.92rem;
+  text-align: center;
+  border-bottom: 1px solid #d9f99d;
+}
+
+/* Scroll-lock applied to <html> while any modal is open (see App.svelte). The
+   backdrop already covers the viewport; freezing the page underneath keeps the
+   mobile address bar from toggling and desyncing fixed-position hit-testing. */
+:root.modal-open,
+:root.modal-open body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 .link-btn {
   font: inherit;
   font-weight: 600;

@@ -34,9 +34,6 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: SAYABLE_BASE=/sayable-systems/ npm run build
-      # Beta-only extras: the TTS benchmark page never enters the app build,
-      # so it can't leak into a production deploy.
-      - run: cp -r bench dist/bench
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

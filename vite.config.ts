@@ -16,8 +16,11 @@ export default defineConfig({
   plugins: [
     svelte(),
     VitePWA({
-      registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      // 'prompt' so a new version never yanks the page out from under an active
+      // communicator — we surface a gentle "update ready" banner instead (see
+      // src/lib/pwa.svelte.ts + the update-notice in App.svelte).
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Sayable',
@@ -39,9 +42,6 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
         navigateFallback: `${base}index.html`,
-        // /bench/ is a standalone page copied into the beta deploy after the
-        // build; keep the SPA fallback from hijacking navigations to it.
-        navigateFallbackDenylist: [/\/bench\//],
         cleanupOutdatedCaches: true,
       },
     }),
