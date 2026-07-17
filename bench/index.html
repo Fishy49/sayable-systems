@@ -181,6 +181,7 @@
       const secs = ((performance.now() - t0) / 1000).toFixed(1);
       log(`Downloaded ${id} in ${secs} s`, 'ok');
       $('bench').disabled = false;
+      $('prerender').disabled = false;
     } catch (e) {
       log(`Download failed: ${e.message}`, 'err');
     }
