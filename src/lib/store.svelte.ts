@@ -2,7 +2,6 @@
 // Top level is a set of Profiles (one per communicator); the active profile
 // holds the boards. Plus a sentence-in-progress and editing state.
 
-import { flushSync } from 'svelte';
 import type { AppData, Board, Profile, SpokenWord, Tile, TileAction, VoicePref } from './types';
 import { seedBoards } from './seed';
 import { speak } from './speech';
@@ -306,7 +305,6 @@ export const app = {
   openEditor(index: number | null): void {
     editorIndex = index;
     editorOpen = true;
-    flushSync(); // mount now — see openSettings for why
   },
   closeEditor(): void {
     editorOpen = false;
@@ -398,7 +396,6 @@ export const app = {
       return;
     }
     profilesOpen = true;
-    flushSync(); // mount now — see openSettings for why
     dbg('openProfiles()');
   },
   closeProfiles(): void {
@@ -454,11 +451,6 @@ export const app = {
       return;
     }
     settingsOpen = true;
-    // Force the modal to mount now. On some mobile Chrome builds the normal
-    // async flush intermittently doesn't land until an unrelated reactive
-    // change nudges it — which is why the gear could go "dead" until you tapped
-    // Edit. flushSync() applies the pending DOM update synchronously, in-handler.
-    flushSync();
     dbg('openSettings()');
   },
   closeSettings(): void {
@@ -516,7 +508,6 @@ export const app = {
   requestUnlock(action: PendingLockAction): void {
     pendingAction = action;
     pinPromptOpen = true;
-    flushSync(); // mount now — see openSettings for why
   },
   cancelPin(): void {
     pinPromptOpen = false;
@@ -537,7 +528,6 @@ export const app = {
   },
   openPinSetup(): void {
     pinSetupOpen = true;
-    flushSync(); // mount now — see openSettings for why
   },
   async setPin(pin: string): Promise<void> {
     data.lockPin = await hashPin(pin);

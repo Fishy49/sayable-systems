@@ -24,7 +24,13 @@ let cachedVoices: SpeechSynthesisVoice[] = [];
 export function getVoices(): SpeechSynthesisVoice[] {
   if (!speechSupported()) return [];
   const voices = window.speechSynthesis.getVoices();
-  if (voices.length) cachedVoices = voices;
+  if (voices.length) {
+    // Some platforms (notably Android/Chrome) return duplicate voices that share
+    // the same voiceURI. Dedupe by voiceURI so anything keying on it stays valid
+    // (a duplicate key crashes Svelte's {#each}) and the picker isn't cluttered.
+    const seen = new Set<string>();
+    cachedVoices = voices.filter((v) => (seen.has(v.voiceURI) ? false : seen.add(v.voiceURI)));
+  }
   return cachedVoices;
 }
 
