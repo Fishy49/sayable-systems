@@ -135,6 +135,7 @@
   ];
   try {
     tts = await import('https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/+esm');
+    window.__tts = tts; // exposed so an automated harness can drive controlled bakes
     log(`Engine module loaded. UA: ${navigator.userAgent}`, 'ok');
     log(`Cores: ${navigator.hardwareConcurrency ?? '?'} · RAM (approx): ${navigator.deviceMemory ?? '?'} GB${mem()}`);
   } catch (e) {
