@@ -37,6 +37,9 @@
     min-height: 28px; padding: 2px 10px; margin: 0 0 0 8px; font-size: 12px;
     background: #334155; color: #e2e8f0; vertical-align: middle;
   }
+  #pr-status { min-height: 1.3em; margin-top: 6px; color: #7dd3fc; }
+  .pr-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+  .pr-word { background: #334155; color: #e2e8f0; min-height: 46px; padding: 8px 14px; margin: 0; }
 </style>
 </head>
 <body>
@@ -65,6 +68,19 @@
     <h2>3 · Compare: system voice (Web Speech API)</h2>
     <select id="sysvoice"></select>
     <div><button id="sysspeak" class="secondary">Speak same sentence with system voice</button></div>
+  </section>
+
+  <section>
+    <h2>4 · Pre-render &amp; cache (the "bake the board" test)</h2>
+    <button id="prerender" disabled>Pre-render 40 core words</button>
+    <progress id="pr-prog" max="100" value="0" hidden></progress>
+    <div id="pr-status" class="sub"></div>
+    <div id="pr-grid" class="pr-grid"></div>
+    <div class="sub">
+      Synthesizes a realistic core-word board <b>once</b> (the one-time cost), caches each clip,
+      then the buttons that appear play <b>instantly</b> from cache. This is the "transparent
+      background bake" idea: slow once, instant forever. Watch the total time + MB.
+    </div>
   </section>
 
   <div id="log">Loading engine module…</div>
@@ -147,6 +163,7 @@
       if (have.length) {
         log(`Already stored: ${have.join(', ')}`, 'ok');
         $('bench').disabled = false;
+        $('prerender').disabled = false;
       }
     } catch {}
   };
@@ -176,6 +193,7 @@
       await tts.flush();
       log('Stored voices cleared.', 'ok');
       $('bench').disabled = true;
+      $('prerender').disabled = true;
     } catch (e) {
       log(`Clear failed: ${e.message}`, 'err');
     }
@@ -222,6 +240,67 @@
       log(`Benchmark failed: ${e.message}`, 'err');
     }
     $('bench').disabled = false;
+  };
+
+  // ---- Pre-render & cache experiment ----
+  // A realistic core-word board: mostly single words + a few short phrases,
+  // exactly what an AAC home board is made of.
+  const CORE_WORDS = [
+    'I', 'you', 'it', 'want', 'go', 'stop', 'more', 'help', 'like', 'look',
+    'make', 'do', 'not', 'yes', 'no', 'please', 'thank you', 'all done',
+    'my turn', 'come here', 'that one', 'in', 'out', 'up', 'down', 'on',
+    'off', 'open', 'eat', 'drink', 'play', 'big', 'little', 'good', 'happy',
+    'sad', 'I want more', 'where is it', 'who', 'what',
+  ];
+  const cache = new Map(); // text -> { url, bytes }
+
+  $('prerender').onclick = async () => {
+    const id = voiceSel.value;
+    $('prerender').disabled = true;
+    $('pr-grid').innerHTML = '';
+    for (const { url } of cache.values()) URL.revokeObjectURL(url);
+    cache.clear();
+    $('pr-prog').hidden = false;
+    $('pr-prog').value = 0;
+    const words = CORE_WORDS;
+    log(`--- Pre-render ${words.length} core words: ${id} ---`);
+    const t0 = performance.now();
+    let bytes = 0;
+    try {
+      for (let i = 0; i < words.length; i++) {
+        const w = words[i];
+        const wav = await tts.predict({ text: w, voiceId: id });
+        cache.set(w, { url: URL.createObjectURL(wav), bytes: wav.size });
+        bytes += wav.size;
+        $('pr-prog').value = ((i + 1) / words.length) * 100;
+        $('pr-status').textContent =
+          `Baking ${i + 1}/${words.length}: “${w}” · ${(bytes / 1048576).toFixed(1)} MB cached`;
+      }
+      const secs = (performance.now() - t0) / 1000;
+      $('pr-prog').hidden = true;
+      $('pr-status').textContent = `Done. Tap any word — it plays instantly from cache.`;
+      log(`Baked ${words.length} words in ${secs.toFixed(0)} s ` +
+        `(${(secs / words.length).toFixed(1)} s/word avg) · ${(bytes / 1048576).toFixed(1)} MB total`, 'ok');
+      log(`↑ That's the ONE-TIME cost. Now tap words below — each plays from cache.`, 'ok');
+      for (const w of words) {
+        const b = document.createElement('button');
+        b.className = 'pr-word';
+        b.textContent = w;
+        b.onclick = () => {
+          const t = performance.now();
+          const a = new Audio(cache.get(w).url);
+          a.onplaying = () => {
+            $('pr-status').textContent = `“${w}” played from cache in ${(performance.now() - t).toFixed(0)} ms`;
+          };
+          a.play();
+        };
+        $('pr-grid').appendChild(b);
+      }
+    } catch (e) {
+      $('pr-prog').hidden = true;
+      log(`Pre-render failed: ${e.message}`, 'err');
+    }
+    $('prerender').disabled = false;
   };
 </script>
 </body>
