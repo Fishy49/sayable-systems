@@ -30,6 +30,16 @@ export function speechSupported(): boolean {
   return nativeSynth() || fullyBridge() !== null;
 }
 
+// Both speech paths initialize lazily on their first real use, which puts a
+// long "is it broken?" pause before the first word after a cold boot. Warm
+// them at startup: a silent utterance forces Fully/Android to spin up its TTS
+// engine, and getVoices() kicks off the async voice-list load in browsers.
+if (typeof window !== 'undefined') {
+  const fully = fullyBridge();
+  if (fully) fully.textToSpeech(' ');
+  else if (nativeSynth()) window.speechSynthesis.getVoices();
+}
+
 // TTS engines read a lone capital letter by name ("capital I"). Speak such
 // words as a homophone so a button sounds the same tapped alone as it does
 // mid-sentence. Only whole-utterance exact matches are rewritten.
