@@ -8,8 +8,26 @@ export interface SpeakOptions {
   voiceURI?: string;
 }
 
-export function speechSupported(): boolean {
+// Kiosk apps (e.g. Fully Kiosk Browser) render in Android's WebView, which has
+// no Web Speech API. Fully injects a `fully` JS bridge whose textToSpeech()
+// feeds the same Android TTS engine, so speech still works when pinned down.
+interface FullyBridge {
+  textToSpeech(text: string, locale?: string): void;
+  stopTextToSpeech?(): void;
+}
+
+function nativeSynth(): boolean {
   return typeof window !== 'undefined' && 'speechSynthesis' in window;
+}
+
+function fullyBridge(): FullyBridge | null {
+  if (typeof window === 'undefined') return null;
+  const f = (window as unknown as { fully?: FullyBridge }).fully;
+  return f && typeof f.textToSpeech === 'function' ? f : null;
+}
+
+export function speechSupported(): boolean {
+  return nativeSynth() || fullyBridge() !== null;
 }
 
 // TTS engines read a lone capital letter by name ("capital I"). Speak such
@@ -22,7 +40,8 @@ const SPOKEN_FIXES: Record<string, string> = {
 let cachedVoices: SpeechSynthesisVoice[] = [];
 
 export function getVoices(): SpeechSynthesisVoice[] {
-  if (!speechSupported()) return [];
+  // The Fully bridge can't enumerate voices; the device default is used.
+  if (!nativeSynth()) return [];
   const voices = window.speechSynthesis.getVoices();
   if (voices.length) {
     // Some platforms (notably Android/Chrome) return duplicate voices that share
@@ -36,7 +55,7 @@ export function getVoices(): SpeechSynthesisVoice[] {
 
 /** Subscribe to the (async) arrival of system voices. Returns an unsubscribe fn. */
 export function onVoicesChanged(cb: () => void): () => void {
-  if (!speechSupported()) return () => {};
+  if (!nativeSynth()) return () => {};
   const handler = () => {
     getVoices();
     cb();
@@ -49,6 +68,18 @@ export function speak(text: string, opts: SpeakOptions = {}): void {
   const trimmed = text.trim();
   if (!trimmed || !speechSupported()) return;
   const phrase = SPOKEN_FIXES[trimmed] ?? trimmed;
+
+  if (!nativeSynth()) {
+    const fully = fullyBridge();
+    if (!fully) return;
+    fully.stopTextToSpeech?.();
+    // Rate/pitch/voice prefs don't apply through the bridge; the device's
+    // default TTS voice is used. Avoid passing undefined into the Java
+    // overloads — call the 1-arg form unless a locale was given.
+    if (opts.lang) fully.textToSpeech(phrase, opts.lang);
+    else fully.textToSpeech(phrase);
+    return;
+  }
 
   const synth = window.speechSynthesis;
   // Cancel anything mid-flight so rapid tapping stays snappy.
@@ -69,5 +100,6 @@ export function speak(text: string, opts: SpeakOptions = {}): void {
 }
 
 export function stopSpeaking(): void {
-  if (speechSupported()) window.speechSynthesis.cancel();
+  if (nativeSynth()) window.speechSynthesis.cancel();
+  else fullyBridge()?.stopTextToSpeech?.();
 }
