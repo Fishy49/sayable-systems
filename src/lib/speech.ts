@@ -36,8 +36,23 @@ export function speechSupported(): boolean {
 // engine, and getVoices() kicks off the async voice-list load in browsers.
 if (typeof window !== 'undefined') {
   const fully = fullyBridge();
-  if (fully) fully.textToSpeech(' ');
-  else if (nativeSynth()) window.speechSynthesis.getVoices();
+  if (fully) {
+    fully.textToSpeech(' ');
+  } else if (nativeSynth()) {
+    // Kick off the async voice-list load...
+    window.speechSynthesis.getVoices();
+    // ...and warm the synthesis engine silently. A muted (volume 0) real word
+    // forces the engine + voice model to load now, so the first spoken tile
+    // after a cold start doesn't stall. Best-effort: some browsers defer speech
+    // until a user gesture, in which case the first tap warms it instead.
+    try {
+      const warm = new SpeechSynthesisUtterance('ready');
+      warm.volume = 0;
+      window.speechSynthesis.speak(warm);
+    } catch {
+      /* engine not ready yet; the first real utterance will warm it */
+    }
+  }
 }
 
 // TTS engines read a lone capital letter by name ("capital I"). Speak such
