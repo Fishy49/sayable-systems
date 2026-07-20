@@ -6,6 +6,7 @@ import type { AppData, Board, Profile, SpokenWord, Tile, TileAction, VoicePref }
 import { seedBoards } from './seed';
 import { speak } from './speech';
 import { COLORS } from './palette';
+import { SYM, starterSymbol } from './symbolSet';
 import { idbGet, idbSet } from './idb';
 import {
   takeSnapshot,
@@ -344,7 +345,7 @@ export const app = {
         {
           id: uid(),
           text: 'Back',
-          symbol: '🔙',
+          symbol: SYM['Back'] ?? '🔙',
           bg: COLORS.folder,
           action: { kind: 'goto', boardId: profile.homeId },
         },

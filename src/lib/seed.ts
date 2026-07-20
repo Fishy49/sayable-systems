@@ -4,17 +4,22 @@
 
 import type { Board, Tile, TileAction } from './types';
 import { COLORS as C } from './palette';
+import { SYM } from './symbolSet';
 
 let seq = 0;
 const nextId = () => `t${++seq}`;
 
+// Prefer the shipped ARASAAC pictogram for this word; the emoji stays as an
+// offline-safe fallback for any word we don't have a symbol for.
+const pic = (text: string, emoji: string): string => SYM[text] ?? emoji;
+
 function say(text: string, symbol: string, bg: string): Tile {
-  return { id: nextId(), text, symbol, bg, action: { kind: 'speak' } };
+  return { id: nextId(), text, symbol: pic(text, symbol), bg, action: { kind: 'speak' } };
 }
 
 function folder(text: string, symbol: string, boardId: string): Tile {
   const action: TileAction = { kind: 'goto', boardId };
-  return { id: nextId(), text, symbol, bg: C.folder, action };
+  return { id: nextId(), text, symbol: pic(text, symbol), bg: C.folder, action };
 }
 
 export function seedBoards(): { homeId: string; boards: Record<string, Board> } {

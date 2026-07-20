@@ -12,25 +12,44 @@
   let {
     value,
     suggest = '',
+    defaultTab,
     onchange,
   }: {
     value: string;
     suggest?: string;
+    defaultTab?: 'emoji' | 'search';
     onchange: (symbol: string) => void;
   } = $props();
 
   // Initialise the tab + emoji field from the symbol the editor opened with.
   // Read once (untracked) so picking a symbol doesn't yank the tab back.
   const initialValue = untrack(() => value);
-  let mode = $state<'emoji' | 'search' | 'upload'>(isImageSymbol(initialValue) ? 'search' : 'emoji');
+  let mode = $state<'emoji' | 'search' | 'upload'>(
+    untrack(() => defaultTab) ?? (isImageSymbol(initialValue) ? 'search' : 'emoji'),
+  );
   let emojiText = $state(isImageSymbol(initialValue) ? '' : initialValue);
   let query = $state('');
+  let manualQuery = $state(false); // once the caregiver types their own search, stop auto-following
   let results = $state<Pictogram[]>([]);
   let searching = $state(false);
   let embedding = $state(false);
   let processing = $state(false);
   let note = $state('');
   let ctrl: AbortController | null = null;
+
+  // Symbols-by-default: while the Symbols tab is showing and the caregiver
+  // hasn't typed their own query, follow the tile's word and search for it
+  // (debounced) so relevant pictograms appear as they type. Doesn't read
+  // `query`, so setting it here can't loop.
+  $effect(() => {
+    const s = suggest.trim();
+    if (mode !== 'search' || manualQuery || !s) return;
+    const t = setTimeout(() => {
+      query = s;
+      runSearch();
+    }, 350);
+    return () => clearTimeout(t);
+  });
 
   function pickEmoji(e: string) {
     emojiText = e;
@@ -124,7 +143,13 @@
     </div>
   {:else if mode === 'search'}
     <div class="search-row">
-      <input class="text-in" bind:value={query} onkeydown={onKey} placeholder="Search symbols (e.g. water)" />
+      <input
+        class="text-in"
+        bind:value={query}
+        onkeydown={onKey}
+        oninput={() => (manualQuery = true)}
+        placeholder="Search symbols (e.g. water)"
+      />
       <button type="button" class="primary" onclick={runSearch} disabled={searching}>
         {searching ? '…' : 'Search'}
       </button>

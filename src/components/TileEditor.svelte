@@ -2,6 +2,7 @@
   import { app } from '../lib/store.svelte';
   import { CATEGORIES } from '../lib/palette';
   import { speak } from '../lib/speech';
+  import { starterSymbol } from '../lib/symbolSet';
   import SymbolPicker from './SymbolPicker.svelte';
   import TileSymbol from './TileSymbol.svelte';
 
@@ -11,8 +12,11 @@
 
   // Local draft. Re-seeded whenever the editor opens for a (different) tile.
   let text = $state('');
-  let symbol = $state('⭐');
+  let symbol = $state('');
   let bg = $state(CATEGORIES[0].color);
+  // Tracks the picture we last auto-filled from the typed word, so we can keep
+  // suggesting as they type but back off the moment they hand-pick a symbol.
+  let autoSym = '';
   let actionKind = $state<'speak' | 'goto'>('speak');
   let gotoBoardId = $state('__new__');
   let newBoardName = $state('');
@@ -41,13 +45,27 @@
       advOpen = !!existing.spoken?.trim(); // auto-reveal if this tile already has an override
     } else {
       text = '';
-      symbol = '⭐';
+      symbol = '';
+      autoSym = '';
       bg = CATEGORIES[0].color;
       actionKind = 'speak';
       gotoBoardId = '__new__';
       newBoardName = '';
       spoken = '';
       advOpen = false;
+    }
+  });
+
+  // New tiles default to a symbol: as the caregiver types the word, fill in the
+  // matching ARASAAC pictogram if we ship one. We only steer the picture while
+  // it's still our suggestion — a hand-picked symbol (or an edit) wins.
+  $effect(() => {
+    if (!app.editorOpen || !isNew) return;
+    if (symbol && symbol !== autoSym) return; // user chose their own — leave it
+    const s = starterSymbol(text) ?? '';
+    if (s !== symbol) {
+      symbol = s;
+      autoSym = s;
     }
   });
 
@@ -96,7 +114,12 @@
 
         <div class="field field-picture">
           <span class="field-label">Picture</span>
-          <SymbolPicker value={symbol} suggest={text} onchange={(s) => (symbol = s)} />
+          <SymbolPicker
+            value={symbol}
+            suggest={text}
+            defaultTab={isNew ? 'search' : undefined}
+            onchange={(s) => (symbol = s)}
+          />
         </div>
 
         <div class="field field-color">
