@@ -1,9 +1,10 @@
 <script lang="ts">
   import { app } from '../lib/store.svelte';
-  import { getVoices, onVoicesChanged, speak } from '../lib/speech';
+  import { getVoices, onVoicesChanged, speak, speechRateSupported, type VoiceInfo } from '../lib/speech';
   import type { SnapshotMeta } from '../lib/snapshots';
 
-  let voices = $state<SpeechSynthesisVoice[]>([]);
+  let voices = $state<VoiceInfo[]>([]);
+  const rateSupported = speechRateSupported();
   let selected = $state('');
   let backups = $state<SnapshotMeta[]>([]);
 
@@ -138,18 +139,20 @@
         </details>
       </div>
 
-      <div class="field">
-        <span class="field-label">Speed · {rate.toFixed(2)}×</span>
-        <input
-          class="range"
-          type="range"
-          min="0.5"
-          max="1.5"
-          step="0.05"
-          value={rate}
-          oninput={(e) => app.setVoiceRate(Number((e.target as HTMLInputElement).value))}
-        />
-      </div>
+      {#if rateSupported}
+        <div class="field">
+          <span class="field-label">Speed · {rate.toFixed(2)}×</span>
+          <input
+            class="range"
+            type="range"
+            min="0.5"
+            max="1.5"
+            step="0.05"
+            value={rate}
+            oninput={(e) => app.setVoiceRate(Number((e.target as HTMLInputElement).value))}
+          />
+        </div>
+      {/if}
 
       <label class="toggle-row">
         <span class="toggle-text">
