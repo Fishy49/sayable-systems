@@ -5,6 +5,19 @@
 
   let voices = $state<VoiceInfo[]>([]);
   const rateSupported = speechRateSupported();
+
+  // Android's TTS catalog can run to 200+ voices across every language. Keep
+  // the picker approachable: show the device language's voices (plus whatever
+  // is currently saved), with a "show all" escape hatch.
+  const primaryLang = (typeof navigator !== 'undefined' ? navigator.language : 'en')
+    .split('-')[0]
+    .toLowerCase();
+  let showAllLangs = $state(false);
+  const shownVoices = $derived(
+    showAllLangs
+      ? voices
+      : voices.filter((v) => v.lang.toLowerCase().startsWith(primaryLang) || v.voiceURI === selected),
+  );
   let selected = $state('');
   let backups = $state<SnapshotMeta[]>([]);
 
@@ -126,10 +139,19 @@
         <span class="field-label">Voice</span>
         <select class="board-sel" bind:value={selected} onchange={onPick}>
           <option value="">System default</option>
-          {#each voices as v (v.voiceURI)}
+          {#each shownVoices as v (v.voiceURI)}
             <option value={v.voiceURI}>{v.name} ({v.lang}){v.default ? ' — default' : ''}</option>
           {/each}
         </select>
+        {#if voices.length > shownVoices.length}
+          <button type="button" class="linklike" onclick={() => (showAllLangs = true)}>
+            Show all languages ({voices.length} voices)
+          </button>
+        {:else if showAllLangs && voices.length > 0}
+          <button type="button" class="linklike" onclick={() => (showAllLangs = false)}>
+            Show fewer
+          </button>
+        {/if}
         {#if voices.length === 0}
           <p class="picker-note">No installed voices detected yet — the default voice will be used.</p>
         {/if}

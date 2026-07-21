@@ -794,6 +794,17 @@ img.sym-img.chip-sym {
   color: var(--ink-soft);
 }
 
+.linklike {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.85rem;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .import-error {
   color: var(--danger);
   font-weight: 600;
