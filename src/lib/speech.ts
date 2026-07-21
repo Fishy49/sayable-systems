@@ -31,6 +31,7 @@ interface FullyBridge {
   textToSpeech(text: string, localeOrVoice?: string): void;
   stopTextToSpeech?(): void;
   initTts?(): void;
+  shutdownTts?(): void;
   bind?(event: string, code: string): void;
 }
 
@@ -144,6 +145,8 @@ function handleFullyTtsInfo(raw: string) {
   }
   if (!info) return;
   fullyVoices = buildFullyVoices(info);
+  // Debug hook for remote support: lets DevTools confirm the catalog arrived.
+  (window as unknown as Record<string, unknown>).__sayableVoices = fullyVoices.map((v) => v.voiceURI);
   notifyVoiceListeners();
 }
 
@@ -203,6 +206,20 @@ if (typeof window !== 'undefined') {
         // string literal; the "$info" literal below unescapes it for us.
         fully.bind!('ttsInitSuccess', 'window.__sayableTtsInfo("$info")');
         fully.initTts!();
+        // A warm Fully process may hold an already-initialized TTS client;
+        // initTts() is then a no-op and ttsInitSuccess never fires. If the
+        // catalog hasn't arrived shortly, bounce the engine to force a real
+        // init (harmless at startup — nothing is speaking yet).
+        setTimeout(() => {
+          if (fullyVoices.length > 0) return;
+          const f = fullyBridge();
+          try {
+            f?.shutdownTts?.();
+            f?.initTts?.();
+          } catch {
+            /* default voice fallback */
+          }
+        }, 1800);
       } catch {
         /* enumeration unavailable; speak() still works with the default voice */
       }
