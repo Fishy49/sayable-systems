@@ -22,6 +22,7 @@
   let newBoardName = $state('');
   let spoken = $state('');
   let advOpen = $state(false);
+  let hidden = $state(false);
 
   let lastKey = '';
   $effect(() => {
@@ -43,6 +44,7 @@
       newBoardName = '';
       spoken = existing.spoken ?? '';
       advOpen = !!existing.spoken?.trim(); // auto-reveal if this tile already has an override
+      hidden = !!existing.hidden;
     } else {
       text = '';
       symbol = '';
@@ -53,6 +55,7 @@
       newBoardName = '';
       spoken = '';
       advOpen = false;
+      hidden = false; // a brand-new word starts visible
     }
   });
 
@@ -70,7 +73,7 @@
   });
 
   function save() {
-    app.commitTile({ text, symbol, bg, actionKind, gotoBoardId, newBoardName, spoken });
+    app.commitTile({ text, symbol, bg, actionKind, gotoBoardId, newBoardName, spoken, hidden });
   }
 
   function previewSpoken() {
@@ -100,7 +103,7 @@
 
       <div class="modal-body">
         <div class="field-preview">
-          <div class="preview-tile" class:folder={actionKind === 'goto'} style="--bg:{bg};">
+          <div class="preview-tile" class:folder={actionKind === 'goto'} class:masked={hidden} style="--bg:{bg};">
             {#if actionKind === 'goto'}<span class="folder-tab" aria-hidden="true"></span>{/if}
             <TileSymbol symbol={symbol || '⭐'} cls="tile-sym" />
             <span class="tile-label">{text || '…'}</span>
@@ -161,6 +164,16 @@
             {/if}
           {/if}
         </div>
+
+        <label class="toggle-row">
+          <span class="toggle-text">
+            <span class="field-label">Hide this word for now</span>
+            <span class="toggle-hint">
+              It keeps its exact spot on the board, but shows as an empty space until you bring it back.
+            </span>
+          </span>
+          <input type="checkbox" class="switch" bind:checked={hidden} />
+        </label>
 
         {#if actionKind === 'speak'}
           <div class="field field-advanced">

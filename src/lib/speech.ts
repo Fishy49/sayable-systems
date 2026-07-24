@@ -79,17 +79,23 @@ function notifyVoiceListeners() {
   for (const cb of voiceListeners) cb();
 }
 
-// Human labels for Android voice names like "en-us-x-iob-local":
-// language via Intl, then a stable number when a locale has several voices.
-function localeLabel(locale: string): string {
-  const tag = locale.replace('_', '-');
+// Human labels for Android voice names like "en-us-x-iob-local". The engine
+// only hands us an opaque code + locale (no gender, no friendly name), so the
+// friendliest honest label is "<region> <language> <n>", e.g. "US English 1".
+function languageWord(base: string): string {
   try {
-    const label = new Intl.DisplayNames(['en'], { type: 'language' }).of(tag);
-    if (label && label !== tag) return label;
+    const label = new Intl.DisplayNames(['en'], { type: 'language' }).of(base);
+    if (label && label.toLowerCase() !== base.toLowerCase()) return label;
   } catch {
     /* fall through */
   }
-  return tag;
+  return base.toUpperCase();
+}
+
+// Keep the familiar "UK" rather than the ISO region code "GB".
+function shortRegion(code: string): string {
+  const up = code.toUpperCase();
+  return up === 'GB' ? 'UK' : up;
 }
 
 function buildFullyVoices(info: FullyTtsInfo): VoiceInfo[] {
@@ -120,8 +126,10 @@ function buildFullyVoices(info: FullyTtsInfo): VoiceInfo[] {
   return usable.map((v) => {
     const n = (counter.get(v.locale) ?? 0) + 1;
     counter.set(v.locale, n);
-    const base = localeLabel(v.locale);
-    const label = (perLocaleCount.get(v.locale) ?? 1) > 1 ? `${base} ${n}` : base;
+    const [base, region] = v.locale.split('_');
+    const many = (perLocaleCount.get(v.locale) ?? 1) > 1;
+    const regionPart = region ? `${shortRegion(region)} ` : '';
+    const label = `${regionPart}${languageWord(base)}${many ? ` ${n}` : ''}`;
     return {
       voiceURI: v.name,
       name: label,

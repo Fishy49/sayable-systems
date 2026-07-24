@@ -6,6 +6,7 @@
   import TileEditor from './components/TileEditor.svelte';
   import ProfilesModal from './components/ProfilesModal.svelte';
   import SettingsModal from './components/SettingsModal.svelte';
+  import VoicePicker from './components/VoicePicker.svelte';
   import PinModal from './components/PinModal.svelte';
   import { pwa } from './lib/pwa.svelte';
 
@@ -45,6 +46,16 @@
       </div>
       <div class="crumb">{app.board.name}</div>
       <div class="top-actions">
+        {#if app.revealAll}
+          <!-- Turning masking back ON is the safe direction, so this needs no PIN. -->
+          <button
+            class="ghost reveal-chip"
+            onclick={() => app.setRevealAll(false)}
+            aria-label="Stop showing every word"
+          >
+            👁 All words
+          </button>
+        {/if}
         {#if app.lockEnabled && !app.locked}
           <button class="ghost icon-only" onclick={() => app.relock()} aria-label="Lock caregiver controls">🔓</button>
         {/if}
@@ -88,9 +99,16 @@
     {/if}
 
     {#if app.editMode}
-      <p class="edit-hint">
-        Editing — tap a tile to change it, drag to reorder, or tap ＋ to add. Changes save automatically.
-      </p>
+      <div class="edit-hint">
+        <span class="edit-hint-text">
+          Editing - tap a tile to change it, drag to reorder, tap 👁 to hide a word, or tap ＋ to add.
+        </span>
+        <span class="mask-tools">
+          <span class="mask-count">{app.boardHiddenCount} hidden here</span>
+          <button class="link-btn" onclick={() => app.setBoardHidden(true)}>Hide all</button>
+          <button class="link-btn" onclick={() => app.setBoardHidden(false)}>Show all</button>
+        </span>
+      </div>
     {:else}
       <UtteranceBar />
     {/if}
@@ -103,5 +121,6 @@
   <TileEditor />
   <ProfilesModal />
   <SettingsModal />
+  <VoicePicker />
   <PinModal />
 {/if}

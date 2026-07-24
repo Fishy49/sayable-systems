@@ -157,6 +157,29 @@ body {
   font-size: 0.92rem;
   text-align: center;
   border-bottom: 1px solid #bae6fd;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 14px;
+}
+
+.edit-hint-text {
+  flex: 1 1 auto;
+}
+
+/* Bulk masking for the board being edited. */
+.mask-tools {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.mask-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- utterance bar ---------- */
@@ -317,7 +340,8 @@ body {
     grid-auto-rows: auto;
     align-content: start;
   }
-  .tile {
+  .tile,
+  .tile-slot {
     aspect-ratio: 1 / 1;
   }
 }
@@ -380,6 +404,78 @@ body {
   font-size: 0.85rem;
   letter-spacing: -1px;
   color: rgba(15, 23, 42, 0.4);
+}
+
+/* ---------- tile masking (progressive vocabulary reveal) ----------
+   A hidden word leaves a quiet, inert placeholder in its own cell. That is the
+   whole point: the words a communicator has already learned never shift under
+   their finger when a new word is revealed. Keep this calm and low-contrast so
+   it reads as "nothing here", not as a tile worth reaching for. */
+.tile-slot {
+  border-radius: var(--radius);
+  border: 2px dashed rgba(15, 23, 42, 0.07);
+  background: rgba(15, 23, 42, 0.015);
+  pointer-events: none;
+}
+
+/* In edit mode a masked tile stays put and stays tappable, just faded out so
+   the caregiver can see at a glance what the communicator is not getting. */
+.tile.masked {
+  opacity: 0.42;
+  filter: saturate(0.35);
+}
+
+/* Bottom-right: the top corners already belong to the drag grip and the
+   category shape badge. This is a touch target on a tablet, so keep it big. */
+.tile-eye {
+  position: absolute;
+  bottom: 4px;
+  right: 5px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  line-height: 1;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.12),
+    0 1px 3px rgba(15, 23, 42, 0.22);
+}
+
+/* Slash the eye when the word is hidden. No emoji renders a struck-through eye
+   reliably across Android font stacks, so draw the bar ourselves. */
+.tile-eye.off::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: 50%;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--danger);
+  transform: rotate(-45deg);
+}
+
+/* The masked tile is already faded; keep its badge readable. */
+.tile.masked .tile-eye {
+  opacity: 1;
+}
+
+/* Top-bar reminder that masking is temporarily overridden. Tapping it restores
+   masking, so it doubles as the fast way out of "show every word". */
+.reveal-chip {
+  background: #fef3c7;
+  border-color: #fcd34d;
+  color: #92400e;
+  font-weight: 700;
+}
+
+.preview-tile.masked {
+  opacity: 0.42;
+  filter: saturate(0.35);
 }
 
 .add-tile {
@@ -1244,5 +1340,193 @@ img.sym-img.chip-sym {
   font-size: 0.6rem;
   font-weight: 800;
   letter-spacing: 0.03em;
+  color: var(--ink-soft);
+}
+
+/* ---------- voice: the "open picker" button in Settings ---------- */
+.voice-open {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  font: inherit;
+  padding: 12px 14px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.voice-open:hover {
+  border-color: var(--accent);
+}
+.voice-open-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  font-weight: 700;
+}
+.voice-open-cta {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+
+/* ---------- voice picker modal ---------- */
+.vp-backdrop {
+  z-index: 60; /* above the Settings modal it opens from */
+}
+.voice-modal {
+  max-width: 540px;
+}
+.vp-tabs {
+  display: flex;
+  gap: 8px;
+}
+.vp-tab {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: inherit;
+  font-weight: 700;
+  padding: 10px 12px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.vp-tab.sel {
+  border-color: var(--accent);
+  background: #e0f2fe;
+  color: #075985;
+}
+.vp-tab:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.vp-count {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.1);
+}
+.vp-tab.sel .vp-count {
+  background: rgba(2, 132, 199, 0.18);
+}
+.vp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vp-chip {
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.vp-chip.sel {
+  border-color: var(--accent);
+  background: #e0f2fe;
+  color: #075985;
+}
+.vp-search {
+  width: 100%;
+}
+.vp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 46dvh;
+  overflow-y: auto;
+  padding: 2px;
+  margin: 0 -2px;
+}
+.vp-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 12px;
+  font: inherit;
+  text-align: left;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+.vp-row:hover {
+  border-color: #bae6fd;
+}
+.vp-row.sel {
+  border-color: var(--accent);
+  background: #e0f2fe;
+}
+.vp-play {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 0.78rem;
+}
+.vp-row.sel .vp-play {
+  background: #fff;
+}
+.vp-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-weight: 600;
+}
+.vp-sub {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+.vp-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #075985;
+  background: rgba(2, 132, 199, 0.14);
+  border-radius: 6px;
+  vertical-align: middle;
+}
+.vp-check {
+  flex: 0 0 auto;
+  font-weight: 800;
+  color: var(--accent);
+}
+.vp-group-head {
+  padding: 8px 4px 2px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: var(--ink-soft);
 }

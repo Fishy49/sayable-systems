@@ -30,6 +30,12 @@
     if (!el) return; // tapped the "add" cell or empty space
     const i = Number(el.dataset.index);
     if (Number.isNaN(i)) return;
+    // The eye badge masks/unmasks in place. It lives inside the tile button, so
+    // the grid claims it here rather than nesting a second button in a button.
+    if ((e.target as HTMLElement).closest('.tile-eye')) {
+      app.toggleTileHidden(i);
+      return; // no drag, no editor
+    }
     dragIndex = i;
     movedFar = false;
     startX = e.clientX;
@@ -71,7 +77,12 @@
   onpointerdown={onPointerDown}
 >
   {#each board.tiles as tile, i (tile.id)}
-    <TileButton {tile} index={i} {editing} dragging={dragIndex === i} />
+    {#if !editing && !app.tileShown(tile)}
+      <!-- A masked word still owns its cell, so the words around it never move. -->
+      <div class="tile-slot" aria-hidden="true"></div>
+    {:else}
+      <TileButton {tile} index={i} {editing} dragging={dragIndex === i} />
+    {/if}
   {/each}
 
   {#if editing}

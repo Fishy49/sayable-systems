@@ -6,19 +6,12 @@
   let voices = $state<VoiceInfo[]>([]);
   const rateSupported = speechRateSupported();
 
-  // Android's TTS catalog can run to 200+ voices across every language. Keep
-  // the picker approachable: show the device language's voices (plus whatever
-  // is currently saved), with a "show all" escape hatch.
-  const primaryLang = (typeof navigator !== 'undefined' ? navigator.language : 'en')
-    .split('-')[0]
-    .toLowerCase();
-  let showAllLangs = $state(false);
-  const shownVoices = $derived(
-    showAllLangs
-      ? voices
-      : voices.filter((v) => v.lang.toLowerCase().startsWith(primaryLang) || v.voiceURI === selected),
-  );
   let selected = $state('');
+  // The tabbed voice picker (its own modal) owns browsing; here we just show
+  // the current pick and a button to open it.
+  const currentVoiceLabel = $derived(
+    (selected && voices.find((v) => v.voiceURI === selected)?.name) || 'System default',
+  );
   let backups = $state<SnapshotMeta[]>([]);
 
   // Load voices (and keep up with their async arrival) while the modal is open.
@@ -56,9 +49,6 @@
   }
   const voiceHint = detectVoiceHint();
 
-  function onPick() {
-    app.setVoiceURI(selected || null);
-  }
   function test() {
     speak('Hi! This is how I sound.', { voiceURI: app.voice.uri, rate: app.voice.rate });
   }
@@ -137,27 +127,16 @@
 
       <div class="field">
         <span class="field-label">Voice</span>
-        <select class="board-sel" bind:value={selected} onchange={onPick}>
-          <option value="">System default</option>
-          {#each shownVoices as v (v.voiceURI)}
-            <option value={v.voiceURI}>{v.name} ({v.lang}){v.default ? ' — default' : ''}</option>
-          {/each}
-        </select>
-        {#if voices.length > shownVoices.length}
-          <button type="button" class="linklike" onclick={() => (showAllLangs = true)}>
-            Show all languages ({voices.length} voices)
-          </button>
-        {:else if showAllLangs && voices.length > 0}
-          <button type="button" class="linklike" onclick={() => (showAllLangs = false)}>
-            Show fewer
-          </button>
-        {/if}
+        <button type="button" class="voice-open" onclick={() => app.openVoicePicker()}>
+          <span class="voice-open-name">{currentVoiceLabel}</span>
+          <span class="voice-open-cta">Change ▸</span>
+        </button>
         {#if voices.length === 0}
-          <p class="picker-note">No installed voices detected yet — the default voice will be used.</p>
+          <p class="picker-note">No installed voices detected yet - the default voice will be used.</p>
         {/if}
         <details class="voice-help">
           <summary>Want more natural voices?</summary>
-          <p>{voiceHint} They’ll show up in the list above once installed — all free and on-device.</p>
+          <p>{voiceHint} They'll show up in the picker once installed - all free and on-device.</p>
         </details>
       </div>
 
@@ -186,6 +165,27 @@
           class="switch"
           checked={app.categoryShapes}
           onchange={(e) => app.setShowShapes((e.target as HTMLInputElement).checked)}
+        />
+      </label>
+
+      <label class="toggle-row">
+        <span class="toggle-text">
+          <span class="field-label">Show every word</span>
+          <span class="toggle-hint">
+            {#if app.profileHiddenCount > 0}
+              Temporarily un-hides {app.profileHiddenCount} hidden word{app.profileHiddenCount === 1 ? '' : 's'}.
+              Turns itself off when you lock or reload.
+            {:else}
+              Nothing is hidden yet. Tap ✏️ Edit, then the 👁 on a tile to hide a word until they're ready for it.
+            {/if}
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          class="switch"
+          checked={app.revealAll}
+          disabled={app.profileHiddenCount === 0}
+          onchange={(e) => app.setRevealAll((e.target as HTMLInputElement).checked)}
         />
       </label>
 

@@ -96,6 +96,7 @@ interface ObfButton {
   background_color?: string;
   border_color?: string;
   load_board?: { id?: string; name?: string; path?: string };
+  hidden?: boolean; // standard OBF field, so masking survives a trip through other tools
   ext_sayable_symbol?: string;
 }
 interface ObfBoard {
@@ -123,6 +124,7 @@ function tileToButton(tile: Tile, images: ObfImage[]): ObfButton {
     border_color: darken(tile.bg),
   };
   if (tile.spoken && tile.spoken.trim() && tile.spoken !== tile.text) btn.vocalization = tile.spoken;
+  if (tile.hidden) btn.hidden = true;
   if (tile.action.kind === 'goto') {
     btn.load_board = { id: tile.action.boardId, path: `boards/${tile.action.boardId}.obf` };
   }
@@ -240,6 +242,7 @@ async function buttonToTile(
     action,
   };
   if (btn.vocalization && btn.vocalization.trim() && btn.vocalization !== text) tile.spoken = btn.vocalization;
+  if (btn.hidden === true) tile.hidden = true;
   return tile;
 }
 

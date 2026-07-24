@@ -15,6 +15,10 @@ export interface Tile {
   bg: string; // tile background color (hex)
   action: TileAction;
   spoken?: string; // advanced: what to SAY, if different from the displayed text
+  // Masked out of the talking view (progressive vocabulary reveal). The tile
+  // KEEPS its slot in `tiles` and on screen - an empty placeholder renders in
+  // its place - so revealing a word never moves the words already learned.
+  hidden?: boolean;
 }
 
 export interface Board {

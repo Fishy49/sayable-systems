@@ -108,6 +108,7 @@ export interface TileDraft {
   gotoBoardId?: string; // an existing board id, or '__new__'
   newBoardName?: string;
   spoken?: string; // advanced: spoken override; blank means "same as text"
+  hidden?: boolean; // masked out of the talking view
 }
 
 // A synchronous placeholder renders instantly; real data hydrates on boot.
@@ -126,6 +127,12 @@ let editorOpen = $state(false);
 let editorIndex = $state<number | null>(null); // null => creating a new tile
 let profilesOpen = $state(false);
 let settingsOpen = $state(false);
+let voicePickerOpen = $state(false);
+
+// "Show every word" - a temporary override of tile masking, for free play or a
+// therapy session. Deliberately session-only (never persisted): if the tablet
+// reloads or gets handed back, masking comes back on its own.
+let revealAll = $state(false);
 
 // ---- caregiver lock ----
 // The PIN gates the caregiver surface (edit / settings / profiles). Unlock
@@ -202,6 +209,9 @@ export const app = {
   },
   get settingsOpen(): boolean {
     return settingsOpen;
+  },
+  get voicePickerOpen(): boolean {
+    return voicePickerOpen;
   },
   get voice(): VoicePref {
     return this.activeProfile.voice ?? {};
@@ -287,6 +297,45 @@ export const app = {
     editorOpen = false;
   },
 
+  // ----- tile masking (progressive vocabulary reveal) -----
+  get revealAll(): boolean {
+    return revealAll;
+  },
+  setRevealAll(on: boolean): void {
+    revealAll = on;
+  },
+  /** Is this tile shown to the communicator right now? */
+  tileShown(tile: Tile): boolean {
+    return !tile.hidden || revealAll;
+  },
+  /** Masked tiles on the board being viewed. */
+  get boardHiddenCount(): number {
+    return this.board.tiles.filter((t) => t.hidden).length;
+  },
+  /** Masked tiles across every board in the active profile. */
+  get profileHiddenCount(): number {
+    return Object.values(this.activeProfile.boards).reduce(
+      (n, b) => n + b.tiles.filter((t) => t.hidden).length,
+      0,
+    );
+  },
+  toggleTileHidden(index: number): void {
+    const t = this.board.tiles[index];
+    if (!t) return;
+    // Store nothing for the common case, so a visible tile stays a clean record.
+    if (t.hidden) delete t.hidden;
+    else t.hidden = true;
+    this.persist();
+  },
+  /** Mask or unmask every tile on the board being viewed. */
+  setBoardHidden(hidden: boolean): void {
+    for (const t of this.board.tiles) {
+      if (hidden) t.hidden = true;
+      else delete t.hidden;
+    }
+    this.persist();
+  },
+
   moveTile(from: number, to: number): void {
     const tiles = this.board.tiles;
     if (from === to || from < 0 || to < 0 || from >= tiles.length || to >= tiles.length) return;
@@ -309,8 +358,17 @@ export const app = {
 
     const text = draft.text.trim() || draft.symbol;
     const spoken = draft.spoken?.trim() || undefined; // store nothing when it matches the label
+    const hidden = draft.hidden || undefined; // omit the field entirely when visible
     if (editorIndex === null) {
-      this.board.tiles.push({ id: uid(), text, symbol: draft.symbol, bg: draft.bg, action, spoken });
+      this.board.tiles.push({
+        id: uid(),
+        text,
+        symbol: draft.symbol,
+        bg: draft.bg,
+        action,
+        spoken,
+        hidden,
+      });
     } else {
       const t = this.board.tiles[editorIndex];
       if (t) {
@@ -319,6 +377,8 @@ export const app = {
         t.bg = draft.bg;
         t.action = action;
         t.spoken = spoken;
+        if (hidden) t.hidden = true;
+        else delete t.hidden;
       }
     }
     this.persist();
@@ -382,6 +442,7 @@ export const app = {
     data.activeProfileId = id;
     currentBoardId = this.activeProfile.homeId;
     editMode = false;
+    revealAll = false; // each communicator gets their own masking back
     this.closeEditor();
     this.closeProfiles();
     this.persist();
@@ -430,6 +491,13 @@ export const app = {
   },
   closeSettings(): void {
     settingsOpen = false;
+    voicePickerOpen = false;
+  },
+  openVoicePicker(): void {
+    voicePickerOpen = true;
+  },
+  closeVoicePicker(): void {
+    voicePickerOpen = false;
   },
   setVoiceURI(uri: string | null): void {
     const p = this.activeProfile;
@@ -516,8 +584,10 @@ export const app = {
   },
   relock(): void {
     unlockedThisSession = false;
-    // Hand-back safety: leave no caregiver surface open behind the lock.
+    // Hand-back safety: leave no caregiver surface open behind the lock, and
+    // put masking back on, so "show all words" can't outlive the grown-up.
     editMode = false;
+    revealAll = false;
     this.closeEditor();
     this.closeSettings();
     this.closeProfiles();
