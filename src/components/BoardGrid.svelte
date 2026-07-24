@@ -15,6 +15,16 @@
   let startX = 0;
   let startY = 0;
 
+  // A floating copy of the tile that tracks the finger. The reorder itself is
+  // live (tiles swap as you pass over them), so without this there is nothing
+  // in your hand and the tile just teleports from cell to cell.
+  let ghost = $state<{ w: number; h: number; x: number; y: number } | null>(null);
+  // Where inside the tile the finger landed, so the ghost doesn't jump on lift.
+  let grabDX = 0;
+  let grabDY = 0;
+  let grabW = 0;
+  let grabH = 0;
+
   function indexAt(x: number, y: number): number | null {
     const el = (document.elementFromPoint(x, y) as HTMLElement | null)?.closest('[data-index]') as
       | HTMLElement
@@ -40,14 +50,21 @@
     movedFar = false;
     startX = e.clientX;
     startY = e.clientY;
+    const r = el.getBoundingClientRect();
+    grabDX = e.clientX - r.left;
+    grabDY = e.clientY - r.top;
+    grabW = r.width;
+    grabH = r.height;
     window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp, { once: true });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerCancel);
   }
 
   function onPointerMove(e: PointerEvent) {
     if (dragIndex === null) return;
     if (!movedFar && Math.hypot(e.clientX - startX, e.clientY - startY) > 8) movedFar = true;
-    if (!movedFar) return;
+    if (!movedFar) return; // a tap should never flash a ghost
+    ghost = { w: grabW, h: grabH, x: e.clientX - grabDX, y: e.clientY - grabDY };
     const over = indexAt(e.clientX, e.clientY);
     if (over !== null && over !== dragIndex && over < board.tiles.length) {
       app.moveTile(dragIndex, over);
@@ -56,13 +73,27 @@
   }
 
   function onPointerUp() {
+    endDrag(true);
+  }
+
+  // Fires when the browser steals the gesture (scroll takeover, a call coming
+  // in). Tear down the same way, minus the tap, so no ghost is left stranded.
+  function onPointerCancel() {
+    endDrag(false);
+  }
+
+  function endDrag(allowTap: boolean) {
     window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerCancel);
     const idx = dragIndex;
     const wasTap = !movedFar;
     dragIndex = null;
-    if (wasTap && idx !== null) {
-      app.openEditor(idx); // a tap in edit mode opens the tile editor
-    } else if (idx !== null) {
+    ghost = null;
+    if (idx === null) return;
+    if (wasTap) {
+      if (allowTap) app.openEditor(idx); // a tap in edit mode opens the tile editor
+    } else {
       app.persist(); // a reorder finished
     }
   }
@@ -92,3 +123,14 @@
     </button>
   {/if}
 </div>
+
+{#if ghost && dragIndex !== null && board.tiles[dragIndex]}
+  {@const held = board.tiles[dragIndex]}
+  <div
+    class="tile-ghost"
+    style="width:{ghost.w}px; height:{ghost.h}px; transform: translate3d({ghost.x}px, {ghost.y}px, 0) scale(1.04);"
+    aria-hidden="true"
+  >
+    <TileButton tile={held} index={-1} editing={true} />
+  </div>
+{/if}
