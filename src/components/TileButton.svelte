@@ -17,6 +17,9 @@
   } = $props();
 
   const isFolder = $derived(tile.action.kind === 'goto');
+  // An authored gap. Like a masked tile, it only ever renders in edit mode -
+  // the communicator sees the same plain empty slot either way.
+  const isBlank = $derived(tile.action.kind === 'blank');
   // Masked tiles vanish for the communicator (the grid renders an empty slot
   // instead), so the only place this renders is edit mode: dimmed, still here.
   const masked = $derived(!!tile.hidden);
@@ -31,20 +34,26 @@
 <button
   class="tile"
   class:folder={isFolder}
+  class:blank={isBlank}
   class:editing
   class:dragging
   class:masked={masked && editing}
-  style="--bg:{tile.bg};"
+  style="--bg:{isBlank ? 'transparent' : tile.bg};"
   data-index={index}
   onclick={onClick}
-  aria-label={`${isFolder ? `Open ${tile.text}` : tile.text}${masked ? ', hidden' : ''}`}
+  aria-label={isBlank ? 'Empty space' : `${isFolder ? `Open ${tile.text}` : tile.text}${masked ? ', hidden' : ''}`}
 >
   {#if isFolder}<span class="folder-tab" aria-hidden="true"></span>{/if}
   {#if editing}
     <span class="edit-grip" aria-hidden="true">⠿</span>
-    <span class="tile-eye" class:off={masked} aria-hidden="true">👁</span>
+    <!-- Masking a gap is meaningless: there is no word here to bring back. -->
+    {#if !isBlank}<span class="tile-eye" class:off={masked} aria-hidden="true">👁</span>{/if}
   {/if}
-  {#if app.categoryShapes}<CategoryBadge color={tile.bg} />{/if}
-  <TileSymbol symbol={tile.symbol} cls="tile-sym" />
-  <span class="tile-label">{tile.text}</span>
+  {#if isBlank}
+    <span class="tile-label blank-label">{editing ? 'empty' : ''}</span>
+  {:else}
+    {#if app.categoryShapes}<CategoryBadge color={tile.bg} />{/if}
+    <TileSymbol symbol={tile.symbol} cls="tile-sym" />
+    <span class="tile-label">{tile.text}</span>
+  {/if}
 </button>

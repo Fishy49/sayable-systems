@@ -97,6 +97,10 @@ interface ObfButton {
   border_color?: string;
   load_board?: { id?: string; name?: string; path?: string };
   hidden?: boolean; // standard OBF field, so masking survives a trip through other tools
+  // OBF's specialty buttons (":clear", ":backspace", ":home", ":space", ...).
+  // Sayable puts those controls in the sentence bar rather than on the board.
+  action?: string;
+  actions?: string[];
   ext_sayable_symbol?: string;
 }
 interface ObfBoard {
@@ -149,7 +153,9 @@ function boardToObf(board: Board): ObfBoard {
     const row: (string | null)[] = [];
     for (let c = 0; c < cols; c++) {
       const tile = board.tiles[idx++];
-      if (tile) {
+      // A blank is an authored gap, which OBF spells as a null cell with no
+      // button - exactly how a cell past the end of the board is spelled too.
+      if (tile && tile.action.kind !== 'blank') {
         row.push(tile.id);
         buttons.push(tileToButton(tile, images));
       } else {
@@ -216,16 +222,52 @@ async function resolveImage(
   return null;
 }
 
+/** A blank cell, used for both authored gaps and OBF buttons we can't honour. */
+function blankTile(): Tile {
+  return { id: rid('t'), text: '', symbol: '', bg: DEFAULT_SPEAK_BG, action: { kind: 'blank' } };
+}
+
+/**
+ * True for OBF's specialty buttons (`:clear`, `:backspace`, `:home`, ...).
+ * Sayable has those controls in the sentence bar, so importing one as an
+ * ordinary tile would make a "Clear" button that literally says "clear" out
+ * loud. We keep its cell and drop the button.
+ */
+function isSpecialtyAction(btn: ObfButton): boolean {
+  if (btn.load_board) return false; // navigation wins; it's a folder, not a control
+  const all = [btn.action, ...(btn.actions ?? [])];
+  return all.some((a) => typeof a === 'string' && a.startsWith(':'));
+}
+
+/** How a `.obz` lets us check a `load_board` link against the boards it ships. */
+interface BoardIndex {
+  ids: Set<string>; // every board id in the bundle
+  byPath: Map<string, string>; // "boards/foo.obf" -> that board's id
+}
+
 async function buttonToTile(
   btn: ObfButton,
   imagesById: Map<string, ObfImage>,
   files: Map<string, Uint8Array> | null,
+  index: BoardIndex | null,
 ): Promise<Tile> {
+  if (isSpecialtyAction(btn)) return blankTile();
+
   const text = (btn.label ?? '').toString();
-  const goto = btn.load_board?.id != null;
-  const action: TileAction = goto
-    ? { kind: 'goto', boardId: String(btn.load_board!.id) }
-    : { kind: 'speak' };
+  const lb = btn.load_board;
+  let boardId: string | undefined;
+  if (lb) {
+    const byId = lb.id != null ? String(lb.id) : undefined;
+    const p = lb.path;
+    const byPath = p ? (index?.byPath.get(p) ?? index?.byPath.get(p.replace(/^\.?\//, ''))) : undefined;
+    // An id naming a board we actually have wins. Failing that, take the path:
+    // some exporters write only a path, and others write an id that names the
+    // board's *source*, not the copy in this bundle. Last resort is the raw id,
+    // which is all a single-.obf import has to go on.
+    boardId = (byId && index?.ids.has(byId) ? byId : undefined) ?? byPath ?? byId;
+  }
+  const goto = boardId != null;
+  const action: TileAction = boardId != null ? { kind: 'goto', boardId } : { kind: 'speak' };
 
   let symbol = '';
   if (btn.image_id != null) {
@@ -246,35 +288,47 @@ async function buttonToTile(
   return tile;
 }
 
-async function obfToBoard(obf: ObfBoard, files: Map<string, Uint8Array> | null): Promise<Board> {
+async function obfToBoard(
+  obf: ObfBoard,
+  files: Map<string, Uint8Array> | null,
+  index: BoardIndex | null = null,
+): Promise<Board> {
   const buttonsById = new Map<string, ObfButton>((obf.buttons ?? []).map((b) => [String(b.id), b]));
   const imagesById = new Map<string, ObfImage>((obf.images ?? []).map((im) => [String(im.id), im]));
   const cols = Math.max(1, obf.grid?.columns ?? (Math.ceil(Math.sqrt((obf.buttons ?? []).length)) || 1));
   const rows = obf.grid?.rows ?? (Math.ceil((obf.buttons ?? []).length / cols) || 1);
 
-  // Walk the grid in reading order (Sayable has no empty cells, so nulls are
-  // dropped and the rest compacts). Then append any button not placed by the
-  // grid, so nothing is silently lost.
+  // Walk the grid in reading order. An empty cell becomes a blank tile so the
+  // author's spacing survives - in an AAC layout a gap is a landmark, and
+  // compacting it away would slide every word after it into a new position.
+  // Then append any button the grid never placed, so nothing is silently lost.
   const placed = new Set<string>();
-  const ordered: ObfButton[] = [];
+  const ordered: (ObfButton | null)[] = [];
   if (obf.grid?.order) {
     for (const row of obf.grid.order) {
       for (const cell of row ?? []) {
-        if (cell == null) continue;
+        if (cell == null) {
+          ordered.push(null);
+          continue;
+        }
         const b = buttonsById.get(String(cell));
         if (b && !placed.has(String(cell))) {
           ordered.push(b);
           placed.add(String(cell));
+        } else if (!b) {
+          ordered.push(null); // the grid names a button this board doesn't ship
         }
       }
     }
   }
+  // Trailing gaps are just the unused tail of the last row, not authored space.
+  while (ordered.length && ordered[ordered.length - 1] === null) ordered.pop();
   for (const b of obf.buttons ?? []) {
     if (!placed.has(String(b.id))) ordered.push(b);
   }
 
   const tiles: Tile[] = [];
-  for (const b of ordered) tiles.push(await buttonToTile(b, imagesById, files));
+  for (const b of ordered) tiles.push(b ? await buttonToTile(b, imagesById, files, index) : blankTile());
 
   return { id: String(obf.id ?? rid('b')), name: obf.name ?? 'Board', rows, cols, tiles };
 }
@@ -319,18 +373,31 @@ export async function obzToProfile(bytes: Uint8Array): Promise<ParseResult> {
   const boardPaths = Object.values(manifest.paths?.boards ?? {});
   if (!boardPaths.length) return { ok: false, error: 'This .obz contains no boards.' };
 
-  const boards: Record<string, Board> = {};
-  let profileName = 'Imported boards';
+  // Parse every board first, so a button that links by path (rather than by id)
+  // has something to resolve against before any of them are converted.
+  const parsed: { path: string; obf: ObfBoard }[] = [];
   for (const path of boardPaths) {
     const raw = files.get(path) ?? files.get(path.replace(/^\.?\//, ''));
     if (!raw) continue;
-    let obf: ObfBoard;
     try {
-      obf = JSON.parse(new TextDecoder().decode(raw));
+      parsed.push({ path, obf: JSON.parse(new TextDecoder().decode(raw)) });
     } catch {
-      continue;
+      continue; // one unreadable board shouldn't sink the whole set
     }
-    const board = await obfToBoard(obf, files);
+  }
+  const index: BoardIndex = { ids: new Set(), byPath: new Map() };
+  for (const { path, obf } of parsed) {
+    const id = String(obf.id ?? '');
+    if (!id) continue;
+    index.ids.add(id);
+    index.byPath.set(path, id);
+    index.byPath.set(path.replace(/^\.?\//, ''), id);
+  }
+
+  const boards: Record<string, Board> = {};
+  let profileName = 'Imported boards';
+  for (const { obf } of parsed) {
+    const board = await obfToBoard(obf, files, index);
     boards[board.id] = board;
     if (obf.ext_sayable_profile_name) profileName = obf.ext_sayable_profile_name;
   }

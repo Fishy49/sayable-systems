@@ -6,7 +6,12 @@
 
 export type TileAction =
   | { kind: 'speak' } // say this tile's text and add it to the sentence
-  | { kind: 'goto'; boardId: string }; // navigate to another board
+  | { kind: 'goto'; boardId: string } // navigate to another board
+  // A gap that is there on purpose. AAC layouts use empty cells as landmarks:
+  // a column left free between word types, a corner kept clear so the words
+  // around it never shift. Different from `hidden` below - hidden means "this
+  // word exists but isn't revealed yet", blank means "nothing lives here".
+  | { kind: 'blank' };
 
 export interface Tile {
   id: string;

@@ -105,7 +105,7 @@ export interface TileDraft {
   text: string;
   symbol: string;
   bg: string;
-  actionKind: 'speak' | 'goto';
+  actionKind: 'speak' | 'goto' | 'blank';
   gotoBoardId?: string; // an existing board id, or '__new__'
   newBoardName?: string;
   spoken?: string; // advanced: spoken override; blank means "same as text"
@@ -255,6 +255,7 @@ export const app = {
   },
 
   tap(tile: Tile): void {
+    if (tile.action.kind === 'blank') return; // a deliberate gap does nothing
     if (tile.action.kind === 'goto') {
       const dest = this.activeProfile.boards[tile.action.boardId];
       if (this.logging) logNav(this.activeProfile.id, dest?.name ?? tile.text);
@@ -317,6 +318,9 @@ export const app = {
   },
   /** Is this tile shown to the communicator right now? */
   tileShown(tile: Tile): boolean {
+    // A blank renders as the same empty slot a masked word does, but it is not
+    // a masked word: "Show every word" must never fill in an authored gap.
+    if (tile.action.kind === 'blank') return false;
     return !tile.hidden || revealAll;
   },
   /** Masked tiles on the board being viewed. */
@@ -341,6 +345,7 @@ export const app = {
   /** Mask or unmask every tile on the board being viewed. */
   setBoardHidden(hidden: boolean): void {
     for (const t of this.board.tiles) {
+      if (t.action.kind === 'blank') continue; // there is no word here to mask
       if (hidden) t.hidden = true;
       else delete t.hidden;
     }
@@ -357,7 +362,9 @@ export const app = {
 
   commitTile(draft: TileDraft): void {
     let action: TileAction;
-    if (draft.actionKind === 'goto') {
+    if (draft.actionKind === 'blank') {
+      action = { kind: 'blank' };
+    } else if (draft.actionKind === 'goto') {
       let boardId = draft.gotoBoardId;
       if (!boardId || boardId === '__new__') {
         boardId = this.addBoard((draft.newBoardName || draft.text || 'New board').trim());
@@ -367,24 +374,20 @@ export const app = {
       action = { kind: 'speak' };
     }
 
-    const text = draft.text.trim() || draft.symbol;
-    const spoken = draft.spoken?.trim() || undefined; // store nothing when it matches the label
-    const hidden = draft.hidden || undefined; // omit the field entirely when visible
+    // A gap carries no word, picture, or masking - clearing them here keeps a
+    // tile that was turned into a blank from hoarding its old contents.
+    const blank = action.kind === 'blank';
+    const text = blank ? '' : draft.text.trim() || draft.symbol;
+    const spoken = blank ? undefined : draft.spoken?.trim() || undefined; // nothing when it matches the label
+    const hidden = blank ? undefined : draft.hidden || undefined; // omit the field entirely when visible
+    const symbol = blank ? '' : draft.symbol;
     if (editorIndex === null) {
-      this.board.tiles.push({
-        id: uid(),
-        text,
-        symbol: draft.symbol,
-        bg: draft.bg,
-        action,
-        spoken,
-        hidden,
-      });
+      this.board.tiles.push({ id: uid(), text, symbol, bg: draft.bg, action, spoken, hidden });
     } else {
       const t = this.board.tiles[editorIndex];
       if (t) {
         t.text = text;
-        t.symbol = draft.symbol;
+        t.symbol = symbol;
         t.bg = draft.bg;
         t.action = action;
         t.spoken = spoken;

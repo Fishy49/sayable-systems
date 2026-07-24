@@ -19,7 +19,7 @@ function isValidTile(t: unknown): boolean {
     return false;
   }
   const a = tile.action as Record<string, unknown> | undefined;
-  if (!a || (a.kind !== 'speak' && a.kind !== 'goto')) return false;
+  if (!a || (a.kind !== 'speak' && a.kind !== 'goto' && a.kind !== 'blank')) return false;
   if (a.kind === 'goto' && typeof a.boardId !== 'string') return false;
   return true;
 }
