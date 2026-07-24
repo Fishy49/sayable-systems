@@ -1,7 +1,6 @@
 <script lang="ts">
   import { app } from '../lib/store.svelte';
-  import { buildReport, eventsCsv, weeksCsv, RAW_WINDOW_DAYS, type Range, type UsageReport } from '../lib/usage';
-  import { saveTextFile } from '../lib/transfer';
+  import { buildReport, RAW_WINDOW_DAYS, type Range, type UsageReport } from '../lib/usage';
 
   let range = $state<Range>(30);
   let report = $state<UsageReport | null>(null);
@@ -14,19 +13,6 @@
     { key: 90, label: '90 days' },
     { key: 'all', label: 'All time' },
   ];
-
-  // Sharing a file is a browser feature, not a web-platform guarantee: an
-  // Android WebView typically has no navigator.share at all. Detect it rather
-  // than rendering a button that silently does nothing on the tablet.
-  const canShareFiles = (() => {
-    try {
-      if (typeof navigator === 'undefined' || !navigator.share || !navigator.canShare) return false;
-      const probe = new File(['a,b\n'], 'probe.csv', { type: 'text/csv' });
-      return navigator.canShare({ files: [probe] });
-    } catch {
-      return false;
-    }
-  })();
 
   $effect(() => {
     if (!app.reportOpen) return;
@@ -43,28 +29,6 @@
 
   const maxBucket = $derived(Math.max(1, ...(report?.buckets ?? []).map((b) => b.words)));
   const topMax = $derived(Math.max(1, ...(report?.topWords ?? []).map(([, n]) => n)));
-
-  function csvName(kind: string): string {
-    const slug =
-      app.activeProfile.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) ||
-      'profile';
-    return `sayable-${slug}-${kind}-${new Date().toISOString().slice(0, 10)}.csv`;
-  }
-
-  async function exportCsv(kind: 'taps' | 'weekly') {
-    busy = true;
-    note = '';
-    try {
-      const id = app.activeProfile.id;
-      const text = kind === 'taps' ? await eventsCsv(id) : await weeksCsv(id);
-      await saveTextFile(csvName(kind), text, 'text/csv');
-      note = canShareFiles ? '' : 'Saved to this device’s Downloads.';
-    } catch {
-      note = 'Couldn’t save the file.';
-    } finally {
-      busy = false;
-    }
-  }
 
   async function clearAll() {
     if (!confirm('Delete all recorded usage? This cannot be undone.')) return;
@@ -177,20 +141,7 @@
         {/if}
       {/if}
 
-      <div class="rp-section">
-        <span class="field-label">Give this to a speech therapist</span>
-        <div class="lock-actions">
-          <button class="ghost-dark small" disabled={busy} onclick={() => exportCsv('taps')}>
-            {canShareFiles ? '📤 Share' : '⬇ Save'} every tap (CSV)
-          </button>
-          {#if report?.includesArchived}
-            <button class="ghost-dark small" disabled={busy} onclick={() => exportCsv('weekly')}>
-              {canShareFiles ? '📤 Share' : '⬇ Save'} weekly summary (CSV)
-            </button>
-          {/if}
-        </div>
-        {#if note}<p class="picker-note">{note}</p>{/if}
-      </div>
+      {#if note}<p class="picker-note">{note}</p>{/if}
 
       <div class="modal-actions">
         <button class="danger" disabled={busy} onclick={clearAll}>Delete all</button>
