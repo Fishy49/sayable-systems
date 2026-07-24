@@ -54,6 +54,10 @@ export interface AppData {
   // ask for the PIN. App-level on purpose — the lock belongs to the device,
   // so it never travels with an exported profile.
   lockPin?: string;
+  // Opt-in usage logging, off unless a caregiver turns it on. App-level for the
+  // same reason as the PIN: consent is given for this device, and must not ride
+  // along into someone else's copy when a profile is exported.
+  logUsage?: boolean;
 }
 
 // One entry in the sentence the communicator is building.

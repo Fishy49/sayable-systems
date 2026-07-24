@@ -189,6 +189,31 @@
         />
       </label>
 
+      <label class="toggle-row">
+        <span class="toggle-text">
+          <span class="field-label">Record how it’s used</span>
+          <span class="toggle-hint">
+            Keeps a private note of the words tapped, on this tablet only. Nothing is ever sent anywhere.
+            Off by default.
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          class="switch"
+          checked={app.logging}
+          onchange={(e) => app.setLogging((e.target as HTMLInputElement).checked)}
+        />
+      </label>
+
+      {#if app.logging}
+        <div class="field">
+          <button type="button" class="voice-open" onclick={() => app.openReport()}>
+            <span class="voice-open-name">See the report</span>
+            <span class="voice-open-cta">Open ▸</span>
+          </button>
+        </div>
+      {/if}
+
       <div class="field">
         <span class="field-label">Caregiver lock</span>
         {#if app.lockEnabled}

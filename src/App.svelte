@@ -7,6 +7,7 @@
   import ProfilesModal from './components/ProfilesModal.svelte';
   import SettingsModal from './components/SettingsModal.svelte';
   import VoicePicker from './components/VoicePicker.svelte';
+  import UsageReport from './components/UsageReport.svelte';
   import PinModal from './components/PinModal.svelte';
   import { pwa } from './lib/pwa.svelte';
 
@@ -122,5 +123,6 @@
   <ProfilesModal />
   <SettingsModal />
   <VoicePicker />
+  <UsageReport />
   <PinModal />
 {/if}

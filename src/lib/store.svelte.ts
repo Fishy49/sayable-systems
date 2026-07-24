@@ -8,6 +8,7 @@ import { speak } from './speech';
 import { COLORS } from './palette';
 import { SYM, starterSymbol } from './symbolSet';
 import { idbGet, idbSet } from './idb';
+import { logWord, logUtterance, logNav, collapseOldEvents, usageClear } from './usage';
 import {
   takeSnapshot,
   listSnapshots,
@@ -133,6 +134,7 @@ let voicePickerOpen = $state(false);
 // therapy session. Deliberately session-only (never persisted): if the tablet
 // reloads or gets handed back, masking comes back on its own.
 let revealAll = $state(false);
+let reportOpen = $state(false);
 
 // ---- caregiver lock ----
 // The PIN gates the caregiver surface (edit / settings / profiles). Unlock
@@ -176,6 +178,7 @@ async function boot(): Promise<void> {
   void requestPersistence();
   void checkStorage();
   void maybeAutoSnapshot();
+  void collapseOldEvents(); // fold any usage rows that have aged out of the window
 }
 void boot();
 
@@ -253,6 +256,8 @@ export const app = {
 
   tap(tile: Tile): void {
     if (tile.action.kind === 'goto') {
+      const dest = this.activeProfile.boards[tile.action.boardId];
+      if (this.logging) logNav(this.activeProfile.id, dest?.name ?? tile.text);
       this.openBoard(tile.action.boardId);
       return;
     }
@@ -260,6 +265,7 @@ export const app = {
       ...utterance,
       { id: `w${++wordSeq}`, text: tile.text, symbol: tile.symbol, spoken: tile.spoken },
     ];
+    if (this.logging) logWord(this.activeProfile.id, tile.text);
     speak(spokenText(tile), { voiceURI: this.voice.uri, rate: this.voice.rate });
   },
   openBoard(boardId: string): void {
@@ -272,6 +278,11 @@ export const app = {
     // Read back using each word's spoken override, so a tile sounds the same
     // in a sentence as it does tapped alone.
     const phrase = utterance.map(spokenText).join(' ');
+    // A played-back sentence is the unit MLU is measured in, so log the count
+    // of tiles chosen rather than the words in the spoken string.
+    if (this.logging && utterance.length > 0) {
+      logUtterance(this.activeProfile.id, this.sentence, utterance.length);
+    }
     speak(phrase, { voiceURI: this.voice.uri, rate: this.voice.rate });
   },
   backspace(): void {
@@ -492,6 +503,7 @@ export const app = {
   closeSettings(): void {
     settingsOpen = false;
     voicePickerOpen = false;
+    reportOpen = false;
   },
   openVoicePicker(): void {
     voicePickerOpen = true;
@@ -512,6 +524,29 @@ export const app = {
   setShowShapes(on: boolean): void {
     this.activeProfile.showShapes = on;
     this.persist();
+  },
+
+  // ----- usage logging (opt-in, on-device only) -----
+  get logging(): boolean {
+    return data.logUsage === true; // off unless explicitly turned on
+  },
+  get reportOpen(): boolean {
+    return reportOpen;
+  },
+  openReport(): void {
+    reportOpen = true;
+  },
+  closeReport(): void {
+    reportOpen = false;
+  },
+  setLogging(on: boolean): void {
+    if (on) data.logUsage = true;
+    else delete data.logUsage;
+    this.persist();
+  },
+  /** Erase every logged row. Deliberately does not touch the opt-in itself. */
+  async clearUsage(): Promise<void> {
+    await usageClear();
   },
 
   // ----- backups (local snapshots) -----
