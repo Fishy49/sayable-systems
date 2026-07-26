@@ -4,7 +4,7 @@
 
 import type { AppData, Board, Profile, SpokenWord, Tile, TileAction, VoicePref } from './types';
 import { seedBoards } from './seed';
-import { speak } from './speech';
+import { speak, speechHealthy, onSpeechHealthChange } from './speech';
 import { COLORS } from './palette';
 import { SYM, starterSymbol } from './symbolSet';
 import { idbGet, idbSet } from './idb';
@@ -80,9 +80,16 @@ async function writeData(snapshot: AppData): Promise<void> {
 async function requestPersistence(): Promise<void> {
   try {
     const s = navigator.storage;
-    if (s?.persist && s?.persisted && !(await s.persisted())) await s.persist();
+    if (!s?.persist || !s?.persisted) return; // can't promise either way, so don't claim to
+    const granted = (await s.persisted()) || (await s.persist());
+    // Browsers hand out persistence on engagement signals, and a plain tab
+    // often doesn't qualify - Chrome simply answers false. Without it the
+    // boards are evictable whenever the device wants disk back, which for a
+    // talker means losing their whole vocabulary. Asking and then ignoring a
+    // "no" is the one thing we shouldn't do, so surface it instead.
+    storageEvictable = !granted;
   } catch {
-    // not supported — nothing to do
+    // not supported - nothing to promise, and nothing useful to say
   }
 }
 
@@ -122,6 +129,15 @@ let ready = $state(false);
 let saveError = $state(false);
 let storageWarning = $state<string | null>(null);
 let recoveryNotice = $state<string | null>(null);
+let storageEvictable = $state(false);
+let storageRiskDismissed = $state(false);
+
+// Speech that goes silent without erroring is invisible from inside the app,
+// so the speech layer tells us and the caregiver gets told on screen.
+let speechStalled = $state(!speechHealthy());
+onSpeechHealthChange(() => {
+  speechStalled = !speechHealthy();
+});
 
 let editMode = $state(false);
 let editorOpen = $state(false);
@@ -198,6 +214,17 @@ export const app = {
   },
   dismissRecovery(): void {
     recoveryNotice = null;
+  },
+  /** The browser declined to make this profile's storage permanent. */
+  get storageAtRisk(): boolean {
+    return storageEvictable && !storageRiskDismissed;
+  },
+  dismissStorageRisk(): void {
+    storageRiskDismissed = true;
+  },
+  /** An utterance was swallowed with no error - speech has gone quiet. */
+  get speechStalled(): boolean {
+    return speechStalled;
   },
 
   // ----- profiles -----

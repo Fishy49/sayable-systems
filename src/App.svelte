@@ -98,6 +98,19 @@
     {#if noSpeech}
       <p class="warn">This browser can’t speak out loud, but words will still appear in the bar.</p>
     {/if}
+    {#if app.speechStalled}
+      <p class="save-error">
+        ⚠️ The voice has stopped responding, so tiles are silent. Words still appear in the bar.
+        Closing the browser completely and reopening it usually brings the voice back.
+      </p>
+    {/if}
+    {#if app.storageAtRisk}
+      <p class="warn">
+        This browser hasn’t promised to keep these boards, so it could clear them to make room.
+        Adding Sayable to your home screen makes storage permanent.
+        <button class="link-btn" onclick={() => app.dismissStorageRisk()}>Dismiss</button>
+      </p>
+    {/if}
 
     {#if app.editMode}
       <div class="edit-hint">

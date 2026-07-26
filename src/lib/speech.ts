@@ -260,6 +260,98 @@ const SPOKEN_FIXES: Record<string, string> = {
   I: 'eye',
 };
 
+// Chrome's speech service can wedge: speak() is accepted, `speaking` flips to
+// true, and then no 'start', no 'end' and no 'error' ever arrives. The word is
+// simply swallowed. The queue lives in the browser process rather than the tab,
+// so it survives a reload - only restarting the browser clears it.
+//
+// Silence with no error is the worst failure an AAC app can have: the talker
+// taps, nothing comes out, and nobody can tell whether it's the app, the volume
+// or them. So watch every utterance. If it hasn't begun speaking shortly, retry
+// once from a cleared queue; if that is silent too, say so on screen.
+const START_TIMEOUT_MS = 1500;
+
+let watchTimer: ReturnType<typeof setTimeout> | null = null;
+// Bumped for every utterance we send. Cancelling an utterance makes it report
+// back ('canceled'/'interrupted') after the replacement is already in flight,
+// so events carry the generation they belong to and stale ones are ignored.
+// Without this, tapping a second tile silently disarms the first tile's watch.
+let watchGen = 0;
+let speechOk = true;
+const healthListeners = new Set<() => void>();
+
+/** False once an utterance was swallowed without ever starting or erroring. */
+export function speechHealthy(): boolean {
+  return speechOk;
+}
+
+/** Subscribe to speech going quiet (or recovering). Returns an unsubscribe fn. */
+export function onSpeechHealthChange(cb: () => void): () => void {
+  healthListeners.add(cb);
+  return () => healthListeners.delete(cb);
+}
+
+function setSpeechOk(ok: boolean): void {
+  if (speechOk === ok) return;
+  speechOk = ok;
+  for (const cb of healthListeners) cb();
+}
+
+function clearWatch(): void {
+  if (watchTimer !== null) {
+    clearTimeout(watchTimer);
+    watchTimer = null;
+  }
+}
+
+function speakNative(phrase: string, opts: SpeakOptions, attempt: number): void {
+  const synth = window.speechSynthesis;
+  const gen = ++watchGen; // claim the watch before anything older can report back
+  // Cancel anything mid-flight so rapid tapping stays snappy, and so a retry
+  // starts from an empty queue instead of lining up behind the stuck word.
+  synth.cancel();
+  clearWatch();
+
+  const utterance = new SpeechSynthesisUtterance(phrase);
+  utterance.rate = opts.rate ?? 0.95;
+  utterance.pitch = opts.pitch ?? 1;
+  utterance.lang = opts.lang ?? 'en-US';
+  if (opts.voiceURI) {
+    const voice = synth.getVoices().find((v) => v.voiceURI === opts.voiceURI);
+    if (voice) {
+      utterance.voice = voice;
+      utterance.lang = voice.lang;
+    }
+  }
+
+  let started = false;
+  utterance.addEventListener('start', () => {
+    if (gen !== watchGen) return;
+    started = true;
+    clearWatch();
+    setSpeechOk(true); // it spoke, so whatever was wrong has cleared
+  });
+  utterance.addEventListener('end', () => {
+    if (gen === watchGen) clearWatch();
+  });
+  // An error still means the engine is answering us, so it is not the silent
+  // wedge this watchdog exists for. 'canceled'/'interrupted' are our own
+  // cancel() from the next tap, and 'not-allowed' is the autoplay policy,
+  // which the talker's next real tap cures on its own.
+  utterance.addEventListener('error', () => {
+    if (gen === watchGen) clearWatch();
+  });
+
+  synth.speak(utterance);
+
+  watchTimer = setTimeout(() => {
+    watchTimer = null;
+    if (started || gen !== watchGen) return;
+    if (attempt === 0) speakNative(phrase, opts, 1);
+    else setSpeechOk(false);
+  }, START_TIMEOUT_MS);
+}
+
 export function speak(text: string, opts: SpeakOptions = {}): void {
   const trimmed = text.trim();
   if (!trimmed || !speechSupported()) return;
@@ -280,25 +372,14 @@ export function speak(text: string, opts: SpeakOptions = {}): void {
     return;
   }
 
-  const synth = window.speechSynthesis;
-  // Cancel anything mid-flight so rapid tapping stays snappy.
-  synth.cancel();
-
-  const utterance = new SpeechSynthesisUtterance(phrase);
-  utterance.rate = opts.rate ?? 0.95;
-  utterance.pitch = opts.pitch ?? 1;
-  utterance.lang = opts.lang ?? 'en-US';
-  if (opts.voiceURI) {
-    const voice = window.speechSynthesis.getVoices().find((v) => v.voiceURI === opts.voiceURI);
-    if (voice) {
-      utterance.voice = voice;
-      utterance.lang = voice.lang;
-    }
-  }
-  synth.speak(utterance);
+  // Fully's bridge reports nothing back (no start, end or error events), so
+  // there is nothing for a watchdog to watch. Only the native path is guarded.
+  speakNative(phrase, opts, 0);
 }
 
 export function stopSpeaking(): void {
+  watchGen++; // a deliberate stop must not read as a swallowed word
+  clearWatch();
   const fully = fullyBridge();
   if (fully) fully.stopTextToSpeech?.();
   else if (nativeSynth()) window.speechSynthesis.cancel();
