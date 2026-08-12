@@ -12,7 +12,7 @@
   const currentVoiceLabel = $derived(
     (selected && voices.find((v) => v.voiceURI === selected)?.name) || 'System default',
   );
-  let backups = $state<SnapshotMeta[]>([]);
+  let backup = $state<SnapshotMeta | null>(null);
 
   // Load voices (and keep up with their async arrival) while the modal is open.
   $effect(() => {
@@ -55,20 +55,14 @@
 
   $effect(() => {
     if (!app.settingsOpen) return;
-    void refreshBackups();
+    void refreshBackup();
   });
-  async function refreshBackups() {
-    backups = await app.listBackups();
+  async function refreshBackup() {
+    backup = await app.currentBackup();
   }
   async function restore(id: number) {
-    if (confirm('Restore this backup? Your current boards are saved as a backup first.')) {
+    if (confirm('Go back to this saved copy? Your current boards are saved first, so you can undo it.')) {
       await app.restoreBackup(id);
-    }
-  }
-  async function removeBackup(id: number) {
-    if (confirm('Delete this backup?')) {
-      await app.deleteBackup(id);
-      await refreshBackups();
     }
   }
   function fmtTime(ts: number): string {
@@ -245,26 +239,30 @@
       {/if}
 
       <div class="field">
-        <span class="field-label">Backups</span>
-        {#if backups.length === 0}
-          <p class="picker-note">No backups yet. One is saved automatically and before big changes.</p>
+        <span class="field-label">Saved copy</span>
+        {#if !backup}
+          <p class="picker-note">
+            No saved copy yet. Sayable keeps one, updated as you go and again before any big change.
+          </p>
         {:else}
+          {@const b = backup}
           <div class="backup-list">
-            {#each backups as b (b.id)}
-              <div class="backup-row">
-                <div class="backup-info">
-                  <span class="backup-label">{b.label}</span>
-                  <span class="backup-meta">
-                    {fmtTime(b.ts)} · {b.profiles} profile{b.profiles === 1 ? '' : 's'} · {b.boards} boards
-                  </span>
-                </div>
-                <div class="backup-actions">
-                  <button class="ghost-dark small" onclick={() => restore(b.id)}>Restore</button>
-                  <button class="icon-btn" aria-label="Delete backup" onclick={() => removeBackup(b.id)}>🗑️</button>
-                </div>
+            <div class="backup-row">
+              <div class="backup-info">
+                <span class="backup-label">{b.label}</span>
+                <span class="backup-meta">
+                  {fmtTime(b.ts)} · {b.profiles} profile{b.profiles === 1 ? '' : 's'} · {b.boards} boards
+                </span>
               </div>
-            {/each}
+              <div class="backup-actions">
+                <button class="ghost-dark small" onclick={() => restore(b.id)}>Go back to this</button>
+              </div>
+            </div>
           </div>
+          <p class="picker-note">
+            Sayable keeps one saved copy of your boards, updated as you go and again before any big
+            change. To keep a copy for longer, export a backup file.
+          </p>
         {/if}
       </div>
 

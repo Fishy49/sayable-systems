@@ -1,11 +1,20 @@
-// Local snapshots: a bounded, rolling history of full app-data copies used for
-// self-heal (recover from corruption) and rollback (user-facing restore).
+// The local backup: ONE full copy of the app data, refreshed as the boards
+// change. Used for self-heal (recover from corruption) and for the caregiver's
+// Restore button.
+//
+// This was a rolling history of fifteen. In day to day use nobody ever restores
+// anything but the latest copy - reaching further back would throw away work
+// the caregiver remembers doing - so the extra copies bought nothing and cost
+// storage on a device that is already short of it.
+//
+// Keeping only one copy makes that copy matter more, so it is never written
+// unless the data validates. A backup that cannot be restored is not a backup,
+// and here there is no older one to fall back to.
 
 import type { AppData, Profile } from './types';
 import { snapAdd, snapListMeta, snapGetData, snapDelete, type SnapMeta } from './idb';
 
 export type SnapshotMeta = SnapMeta;
-export const MAX_SNAPSHOTS = 15;
 
 function isValidTile(t: unknown): boolean {
   if (!t || typeof t !== 'object') return false;
@@ -24,7 +33,7 @@ function isValidTile(t: unknown): boolean {
   return true;
 }
 
-/** Defensive shape check for a single profile — gate for self-heal and import. */
+/** Defensive shape check for a single profile - gate for self-heal and import. */
 export function isValidProfile(p: unknown): p is Profile {
   if (!p || typeof p !== 'object') return false;
   const prof = p as Record<string, unknown>;
@@ -59,27 +68,61 @@ function countBoards(data: AppData): number {
   return data.profiles.reduce((n, p) => n + Object.keys(p.boards).length, 0);
 }
 
-export async function takeSnapshot(data: AppData, label: string): Promise<void> {
-  await snapAdd(
-    { ts: Date.now(), label, profiles: data.profiles.length, boards: countBoards(data) },
-    data,
-  );
-  await prune();
-}
-
-async function prune(): Promise<void> {
-  const metas = (await snapListMeta()).sort((a, b) => b.ts - a.ts);
-  for (const m of metas.slice(MAX_SNAPSHOTS)) await snapDelete(m.id);
-}
-
-export async function listSnapshots(): Promise<SnapshotMeta[]> {
+async function metasNewestFirst(): Promise<SnapshotMeta[]> {
   return (await snapListMeta()).sort((a, b) => b.ts - a.ts);
 }
 
-/** Newest snapshot whose payload still validates — the self-heal source. */
-export async function newestValidSnapshot(): Promise<{ data: AppData; ts: number } | null> {
-  const metas = (await snapListMeta()).sort((a, b) => b.ts - a.ts);
+/**
+ * Replace the backup with a copy of `data`.
+ *
+ * Refuses to write anything that would not survive a restore, because the copy
+ * it replaces is the only one there is. Silently does nothing in that case:
+ * the previous good backup stays put, which is the outcome we want.
+ */
+export async function takeSnapshot(data: AppData, label: string): Promise<void> {
+  if (!isValidAppData(data)) return;
+  const keepId = await snapAdd(
+    { ts: Date.now(), label, profiles: data.profiles.length, boards: countBoards(data) },
+    data,
+  );
+  // Written first, then the old copy is dropped, so a crash in between leaves
+  // two backups rather than none.
+  for (const m of await snapListMeta()) {
+    if (m.id !== keepId) await snapDelete(m.id);
+  }
+}
+
+/** The backup's metadata, or null before the first one is written. */
+export async function currentSnapshot(): Promise<SnapshotMeta | null> {
+  return (await metasNewestFirst())[0] ?? null;
+}
+
+/**
+ * Fold a leftover rolling history down to a single copy, keeping the newest one
+ * that still restores. Runs at boot for anyone upgrading from the old fifteen;
+ * a no-op once there is only one.
+ */
+export async function collapseBackups(): Promise<void> {
+  const metas = await metasNewestFirst();
+  if (metas.length <= 1) return;
+  // The newest is not automatically the good one - that is the whole reason the
+  // old design kept a list - so pick the newest that actually validates.
+  let keepId = metas[0].id;
   for (const m of metas) {
+    const data = await snapGetData(m.id).catch(() => undefined);
+    if (isValidAppData(data)) {
+      keepId = m.id;
+      break;
+    }
+  }
+  for (const m of metas) {
+    if (m.id !== keepId) await snapDelete(m.id);
+  }
+}
+
+/** Newest backup whose payload still validates - the self-heal source. */
+export async function newestValidSnapshot(): Promise<{ data: AppData; ts: number } | null> {
+  for (const m of await metasNewestFirst()) {
     const data = await snapGetData(m.id).catch(() => undefined);
     if (isValidAppData(data)) return { data, ts: m.ts };
   }
@@ -89,8 +132,4 @@ export async function newestValidSnapshot(): Promise<{ data: AppData; ts: number
 export async function getSnapshotData(id: number): Promise<AppData | null> {
   const data = await snapGetData(id).catch(() => undefined);
   return isValidAppData(data) ? data : null;
-}
-
-export async function deleteSnapshot(id: number): Promise<void> {
-  await snapDelete(id);
 }

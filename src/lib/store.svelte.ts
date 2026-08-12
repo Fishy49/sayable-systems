@@ -11,10 +11,10 @@ import { idbGet, idbSet } from './idb';
 import { logWord, logUtterance, logNav, collapseOldEvents, usageClear } from './usage';
 import {
   takeSnapshot,
-  listSnapshots,
+  currentSnapshot,
+  collapseBackups,
   newestValidSnapshot,
   getSnapshotData,
-  deleteSnapshot,
   isValidAppData,
   type SnapshotMeta,
 } from './snapshots';
@@ -71,8 +71,9 @@ async function writeData(snapshot: AppData): Promise<void> {
   try {
     await idbSet(APP_KEY, snapshot);
     saveError = false;
+    void maybeAutoSnapshot(snapshot); // keeps the backup tracking real edits, not boots
   } catch {
-    saveError = true; // storage blocked / out of room — surface it, never swallow it
+    saveError = true; // storage blocked / out of room - surface it, never swallow it
   }
   void checkStorage();
 }
@@ -173,15 +174,30 @@ async function hashPin(pin: string): Promise<string> {
   }
 }
 
-async function maybeAutoSnapshot(): Promise<void> {
+const BACKUP_INTERVAL_MS = 60 * 60 * 1000;
+// Mirrors the backup's timestamp so the common case (a save, minutes after the
+// last one) is answered without opening IndexedDB.
+let lastBackupTs = 0;
+
+/**
+ * Refresh the backup if it has aged out, at most once an hour.
+ *
+ * Driven by saves rather than by a timer: a tablet left running for days makes
+ * no new work to protect while nobody touches it, and this used to run only at
+ * boot, which on a kiosk that never reloads meant never again.
+ */
+async function maybeAutoSnapshot(snapshot: AppData): Promise<void> {
   try {
-    const list = await listSnapshots();
-    const hour = 60 * 60 * 1000;
-    if (!list.length || Date.now() - list[0].ts > hour) {
-      await takeSnapshot($state.snapshot(data), 'Automatic');
+    if (Date.now() - lastBackupTs < BACKUP_INTERVAL_MS) return;
+    const current = await currentSnapshot();
+    if (current && Date.now() - current.ts < BACKUP_INTERVAL_MS) {
+      lastBackupTs = current.ts; // includes the "Before ..." copies, so an undo survives its hour
+      return;
     }
+    await takeSnapshot(snapshot, 'Automatic');
+    lastBackupTs = Date.now();
   } catch {
-    // snapshots are best-effort
+    // backups are best-effort
   }
 }
 
@@ -193,7 +209,11 @@ async function boot(): Promise<void> {
   ready = true;
   void requestPersistence();
   void checkStorage();
-  void maybeAutoSnapshot();
+  // Fold any leftover rolling history first, so the age check below reads the
+  // copy we are actually keeping.
+  void collapseBackups()
+    .catch(() => {})
+    .then(() => maybeAutoSnapshot(loaded));
   void collapseOldEvents(); // fold any usage rows that have aged out of the window
 }
 void boot();
@@ -579,11 +599,12 @@ export const app = {
     await usageClear();
   },
 
-  // ----- backups (local snapshots) -----
-  async listBackups(): Promise<SnapshotMeta[]> {
-    return listSnapshots();
+  // ----- backup (one local copy) -----
+  async currentBackup(): Promise<SnapshotMeta | null> {
+    return currentSnapshot();
   },
   async restoreBackup(id: number): Promise<void> {
+    // Read the copy out first: saving the current boards below replaces it.
     const restored = await getSnapshotData(id);
     if (!restored) return;
     await takeSnapshot($state.snapshot(data), 'Before restore'); // make the restore itself undoable
@@ -594,9 +615,6 @@ export const app = {
     this.closeEditor();
     this.closeSettings();
     this.persist();
-  },
-  async deleteBackup(id: number): Promise<void> {
-    await deleteSnapshot(id);
   },
 
   // ----- caregiver lock -----
