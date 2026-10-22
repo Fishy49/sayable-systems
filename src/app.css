@@ -315,11 +315,30 @@ body {
   cursor: default;
 }
 
-/* The keyboard key reads as pressed while its row is open. */
+/* Drawn as a keycap rather than set in the ⌨ glyph, which is thin line art
+   in a text presentation and comes out faint and tiny next to the others.
+   "ABC" is what a phone keyboard calls this button, and it reads at any size. */
+.bar-btn.type {
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  border-radius: 10px;
+  /* The depth that makes it read as a key. It needs its own colour: --line is
+     near-white, so a thick bottom border in it is invisible on the panel. */
+  border-bottom-width: 5px;
+  border-bottom-color: #c3cedb;
+}
+
+/* The key reads as held down while its row is open. */
 .bar-btn.type.on {
   background: var(--ink);
   border-color: var(--ink);
+  border-bottom-color: #020617;
   color: #fff;
+}
+
+.bar-btn.type:active {
+  border-bottom-width: 2px;
 }
 
 /* ---------- typing into the sentence bar ---------- */

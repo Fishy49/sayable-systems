@@ -77,7 +77,7 @@
           aria-label={app.typing ? 'Hide the keyboard' : 'Type a word'}
           aria-pressed={app.typing}
         >
-          ⌨
+          ABC
         </button>
       {/if}
       <button class="bar-btn speak" onclick={() => app.speakAll()} aria-label="Speak">▶</button>
