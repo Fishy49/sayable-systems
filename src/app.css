@@ -239,6 +239,50 @@ body {
   font-size: 1.25rem;
 }
 
+/* The word itself. A button so it can be tapped to arm the chip, styled to
+   look like the plain text it replaced. */
+.chip-word {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* Armed: this word is the one the X belongs to. */
+.chip.armed {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.3);
+}
+
+.chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  margin-right: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--line);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chip-x:active {
+  background: var(--danger);
+  color: #fff;
+}
+
 .bar-actions {
   flex: 0 0 auto;
   display: flex;

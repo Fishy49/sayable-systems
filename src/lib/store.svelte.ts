@@ -130,6 +130,10 @@ let wordSeq = 0;
 // word is not something anyone wants restored on the next launch.
 let typing = $state(false);
 let draft = $state('');
+// Which word in the sentence is armed for removal. Tapping a word arms it and
+// shows its X; nothing is removable until then, so a stray tap on a board
+// being used at speed cannot delete anything.
+let selectedWordId = $state<string | null>(null);
 let ready = $state(false);
 let saveError = $state(false);
 let storageWarning = $state<string | null>(null);
@@ -301,6 +305,9 @@ export const app = {
   get draft(): string {
     return draft;
   },
+  get selectedWordId(): string | null {
+    return selectedWordId;
+  },
 
   // ----- editing -----
   get editMode(): boolean {
@@ -328,6 +335,7 @@ export const app = {
       ...utterance,
       { id: `w${++wordSeq}`, text: tile.text, symbol: tile.symbol, spoken: tile.spoken },
     ];
+    selectedWordId = null;
     if (this.logging) logWord(this.activeProfile.id, tile.text);
     speak(spokenText(tile), { voiceURI: this.voice.uri, rate: this.voice.rate });
   },
@@ -340,6 +348,7 @@ export const app = {
   speakAll(): void {
     // Read back using each word's spoken override, so a tile sounds the same
     // in a sentence as it does tapped alone.
+    selectedWordId = null;
     const phrase = utterance.map(spokenText).join(' ');
     // A played-back sentence is the unit MLU is measured in, so log the count
     // of tiles chosen rather than the words in the spoken string.
@@ -350,10 +359,30 @@ export const app = {
   },
   backspace(): void {
     utterance = utterance.slice(0, -1);
+    selectedWordId = null;
   },
   clear(): void {
     utterance = [];
     draft = '';
+    selectedWordId = null;
+  },
+
+  /**
+   * Tap a word already in the sentence: say that one word and arm it, so its
+   * X appears. Tapping the armed word again puts the X away.
+   */
+  tapWord(id: string): void {
+    if (selectedWordId === id) {
+      selectedWordId = null;
+      return;
+    }
+    selectedWordId = id;
+    const word = utterance.find((w) => w.id === id);
+    if (word) speak(spokenText(word), { voiceURI: this.voice.uri, rate: this.voice.rate });
+  },
+  removeWord(id: string): void {
+    utterance = utterance.filter((w) => w.id !== id);
+    selectedWordId = null;
   },
 
   // ----- typing -----
@@ -378,6 +407,7 @@ export const app = {
     draft = '';
     if (!text) return;
     utterance = [...utterance, { id: `w${++wordSeq}`, text, symbol: '' }];
+    selectedWordId = null;
     if (this.logging) {
       // Log each real word, not the phrase as one entry, so the vocabulary
       // in the usage report stays comparable with tapped words.

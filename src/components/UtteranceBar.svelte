@@ -18,23 +18,55 @@
       app.setTyping(false);
     }
   }
+
+  // The strip itself speaks the whole sentence, so a tap that lands on a word
+  // must not also set the whole thing off.
+  function tapWord(e: MouseEvent, id: string) {
+    e.stopPropagation();
+    app.tapWord(id);
+  }
+  function removeWord(e: MouseEvent, id: string) {
+    e.stopPropagation();
+    app.removeWord(id);
+  }
 </script>
 
 <section class="utterance">
   <div class="bar-row">
-    <button class="strip" onclick={() => app.speakAll()} aria-label="Speak the whole sentence">
+    <!-- A plain div, not a button: it holds buttons now. Speaking the sentence
+         from here is a convenience for a pointer; the labelled way in is the
+         play button beside it. -->
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+    <div class="strip" onclick={() => app.speakAll()}>
       {#if app.utterance.length === 0}
         <span class="placeholder">
           {app.canType ? 'Tap pictures or type to talk…' : 'Tap pictures to talk…'}
         </span>
       {:else}
         {#each app.utterance as word (word.id)}
-          <!-- No line breaks inside the chip: it is a flex box, and stray
-               whitespace would render as a gap before the word. -->
-          <span class="chip">{#if word.symbol}<TileSymbol symbol={word.symbol} cls="chip-sym" />{/if}{word.text}</span>
+          {@const armed = app.selectedWordId === word.id}
+          <span class="chip" class:armed>
+            <!-- No line breaks between the picture and the word: this is a flex
+                 box, and stray whitespace would render as a gap before it. -->
+            <button
+              class="chip-word"
+              onclick={(e) => tapWord(e, word.id)}
+              aria-pressed={armed}
+              aria-label={armed ? `${word.text}, tap again to put the X away` : word.text}
+            >{#if word.symbol}<TileSymbol symbol={word.symbol} cls="chip-sym" />{/if}{word.text}</button>
+            {#if armed}
+              <button
+                class="chip-x"
+                onclick={(e) => removeWord(e, word.id)}
+                aria-label={`Remove ${word.text}`}
+              >
+                ×
+              </button>
+            {/if}
+          </span>
         {/each}
       {/if}
-    </button>
+    </div>
 
     <div class="bar-actions">
       {#if app.canType}
