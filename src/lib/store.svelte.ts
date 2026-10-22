@@ -7,6 +7,7 @@ import { seedBoards } from './seed';
 import { speak, speechHealthy, onSpeechHealthChange } from './speech';
 import { COLORS } from './palette';
 import { SYM, starterSymbol } from './symbolSet';
+import { isImageSymbol } from './symbols';
 import { idbGet, idbSet } from './idb';
 import { logWord, logUtterance, logNav, collapseOldEvents, usageClear } from './usage';
 import {
@@ -14,12 +15,17 @@ import {
   currentSnapshot,
   collapseBackups,
   newestValidSnapshot,
+  newestSnapshotRaw,
   getSnapshotData,
   isValidAppData,
   type SnapshotMeta,
 } from './snapshots';
 
 const APP_KEY = 'sayable.app.v1';
+// Where a live record that failed validation is set aside. It is the only
+// trace of the boards at that point, so it is kept, not overwritten.
+const REJECTED_KEY = `${APP_KEY}.rejected`;
+const REJECTED_BACKUP_KEY = `${APP_KEY}.rejected.backup`;
 
 // What a tile actually says: its spoken override if set, else its displayed text.
 function spokenText(t: { text: string; spoken?: string }): string {
@@ -44,27 +50,74 @@ function seedAppData(): AppData {
 
 // ---- durable storage: IndexedDB ----
 
-async function loadData(): Promise<AppData> {
+// What loading found, beyond the data itself:
+//   rejected   - a record was there and failed validation; it has been set aside
+//   unreadable - storage could not be read at all; nothing may be written
+type LoadTrouble = null | 'rejected' | 'unreadable';
+
+async function loadData(): Promise<{ data: AppData; trouble: LoadTrouble }> {
+  let stored: unknown;
   try {
-    const stored = await idbGet<AppData>(APP_KEY);
-    if (isValidAppData(stored)) return stored;
+    stored = await idbGet<unknown>(APP_KEY);
   } catch {
-    // fall through to snapshot recovery
+    // The boards may well be fine in there; this process just cannot see them.
+    // Run on a starter set in memory and write nothing, so a reload can.
+    return { data: seedAppData(), trouble: 'unreadable' };
   }
+  if (isValidAppData(stored)) return { data: stored, trouble: null };
+
   // Main record missing or corrupt → self-heal from the newest good snapshot.
   try {
     const recovered = await newestValidSnapshot();
     if (recovered) {
-      recoveryNotice = `Recovered your boards from a backup (${new Date(recovered.ts).toLocaleString()}).`;
+      notice = `Recovered your boards from a backup (${new Date(recovered.ts).toLocaleString()}).`;
       await writeData(recovered.data); // repair the live record
-      return recovered.data;
+      return { data: recovered.data, trouble: null };
     }
   } catch {
     // ignore and seed
   }
+
+  // Nothing restorable. A missing record is a fresh install; a present one
+  // that failed the check is somebody's vocabulary, and the starter set about
+  // to be written would otherwise be the last anyone saw of it.
+  const rejected = stored !== undefined;
+  if (rejected) await stashRejected(stored);
   const seeded = seedAppData();
   await writeData(seeded);
-  return seeded;
+  return { data: seeded, trouble: rejected ? 'rejected' : null };
+}
+
+async function stashRejected(record: unknown): Promise<void> {
+  try {
+    await idbSet(REJECTED_KEY, { ts: Date.now(), data: record });
+    // The backup goes next: the seed's own backup will replace it.
+    const backup = await newestSnapshotRaw();
+    if (backup !== undefined) await idbSet(REJECTED_BACKUP_KEY, { ts: Date.now(), data: backup });
+  } catch {
+    // best effort; the notice still says what happened
+  }
+}
+
+/**
+ * One-time repairs for records written by earlier versions. Returns true when
+ * anything changed, so the caller can persist once.
+ */
+function repairData(d: AppData): boolean {
+  let changed = false;
+  for (const p of d.profiles) {
+    for (const b of Object.values(p.boards)) {
+      for (const t of b.tiles) {
+        // A picture-only tile used to get its image's data URL as its words,
+        // which it then read aloud, byte by byte.
+        if (t.text && isImageSymbol(t.text) && t.text === t.symbol) {
+          t.text = '';
+          changed = true;
+        }
+      }
+    }
+  }
+  return changed;
 }
 
 async function writeData(snapshot: AppData): Promise<void> {
@@ -137,7 +190,13 @@ let selectedWordId = $state<string | null>(null);
 let ready = $state(false);
 let saveError = $state(false);
 let storageWarning = $state<string | null>(null);
-let recoveryNotice = $state<string | null>(null);
+// A dismissable line of information: a recovery, an import that had to make do.
+let notice = $state<string | null>(null);
+// Something went wrong with storage at boot that the caregiver must know about.
+let storageTrouble = $state<string | null>(null);
+// Set when storage could not be read: writing anything would overwrite boards
+// this process never saw.
+let persistBlocked = false;
 let storageEvictable = $state(false);
 let storageRiskDismissed = $state(false);
 
@@ -194,7 +253,19 @@ let lastBackupTs = 0;
  * no new work to protect while nobody touches it, and this used to run only at
  * boot, which on a kiosk that never reloads meant never again.
  */
-async function maybeAutoSnapshot(snapshot: AppData): Promise<void> {
+let autoSnapshotInFlight: Promise<void> | null = null;
+function maybeAutoSnapshot(snapshot: AppData): Promise<void> {
+  // Saves can arrive faster than a backup is written. Later calls join the one
+  // in flight rather than each concluding the backup is stale and writing
+  // their own; the next hour's backup picks up whatever they carried.
+  if (autoSnapshotInFlight) return autoSnapshotInFlight;
+  autoSnapshotInFlight = autoSnapshotNow(snapshot).finally(() => {
+    autoSnapshotInFlight = null;
+  });
+  return autoSnapshotInFlight;
+}
+
+async function autoSnapshotNow(snapshot: AppData): Promise<void> {
   try {
     if (Date.now() - lastBackupTs < BACKUP_INTERVAL_MS) return;
     const current = await currentSnapshot();
@@ -210,7 +281,19 @@ async function maybeAutoSnapshot(snapshot: AppData): Promise<void> {
 }
 
 async function boot(): Promise<void> {
-  const loaded = await loadData();
+  const { data: loaded, trouble } = await loadData();
+  if (trouble === 'unreadable') {
+    persistBlocked = true;
+    storageTrouble =
+      'Sayable couldn\u2019t read its saved boards, so a starter set is showing. Nothing will be saved ' +
+      'until the app is closed and reopened, so your boards stay as they were.';
+  } else if (trouble === 'rejected') {
+    storageTrouble =
+      'The saved boards couldn\u2019t be read, so a starter set is loaded. The unreadable copy has been ' +
+      'set aside on this device, not deleted.';
+  } else if (repairData(loaded)) {
+    void writeData(loaded);
+  }
   data = loaded;
   const active = loaded.profiles.find((p) => p.id === loaded.activeProfileId) ?? loaded.profiles[0];
   currentBoardId = active.homeId;
@@ -237,11 +320,24 @@ export const app = {
   get storageWarning(): string | null {
     return storageWarning;
   },
-  get recoveryNotice(): string | null {
-    return recoveryNotice;
+  get notice(): string | null {
+    return notice;
   },
-  dismissRecovery(): void {
-    recoveryNotice = null;
+  showNotice(text: string): void {
+    notice = text;
+  },
+  dismissNotice(): void {
+    notice = null;
+  },
+  get storageTrouble(): string | null {
+    return storageTrouble;
+  },
+  /** True when nothing can be saved this session (storage was unreadable at boot). */
+  get persistBlocked(): boolean {
+    return persistBlocked;
+  },
+  dismissStorageTrouble(): void {
+    storageTrouble = null;
   },
   /** The browser declined to make this profile's storage permanent. */
   get storageAtRisk(): boolean {
@@ -505,7 +601,8 @@ export const app = {
     // A gap carries no word, picture, or masking - clearing them here keeps a
     // tile that was turned into a blank from hoarding its old contents.
     const blank = action.kind === 'blank';
-    const text = blank ? '' : draft.text.trim() || draft.symbol;
+    // An emoji can stand in for the words; an image's data URL cannot.
+    const text = blank ? '' : draft.text.trim() || (isImageSymbol(draft.symbol) ? '' : draft.symbol);
     const spoken = blank ? undefined : draft.spoken?.trim() || undefined; // nothing when it matches the label
     const hidden = blank ? undefined : draft.hidden || undefined; // omit the field entirely when visible
     const symbol = blank ? '' : draft.symbol;
@@ -556,6 +653,59 @@ export const app = {
     return id;
   },
 
+  /**
+   * Remove a board. Tiles that opened it keep their cell as a gap, so nothing
+   * around them moves. The home board cannot be removed.
+   */
+  deleteBoard(boardId: string): void {
+    const p = this.activeProfile;
+    const board = p.boards[boardId];
+    if (!board || boardId === p.homeId) return;
+    void takeSnapshot($state.snapshot(data), `Before deleting ${board.name}`);
+    delete p.boards[boardId];
+    for (const b of Object.values(p.boards)) {
+      for (const t of b.tiles) {
+        if (t.action.kind === 'goto' && t.action.boardId === boardId) {
+          t.action = { kind: 'blank' };
+          t.text = '';
+          t.symbol = '';
+          delete t.spoken;
+          delete t.hidden;
+        }
+      }
+    }
+    if (currentBoardId === boardId) currentBoardId = p.homeId;
+    this.closeEditor();
+    this.persist();
+  },
+  /** Boards no tile can reach from home: leftovers from deleted folder tiles. */
+  get unreachableBoardIds(): string[] {
+    const p = this.activeProfile;
+    const seen = new Set<string>([p.homeId]);
+    const queue = [p.homeId];
+    while (queue.length) {
+      const b = p.boards[queue.shift()!];
+      if (!b) continue;
+      for (const t of b.tiles) {
+        if (t.action.kind === 'goto' && p.boards[t.action.boardId] && !seen.has(t.action.boardId)) {
+          seen.add(t.action.boardId);
+          queue.push(t.action.boardId);
+        }
+      }
+    }
+    return Object.keys(p.boards).filter((id) => !seen.has(id));
+  },
+  removeUnreachableBoards(): number {
+    const ids = this.unreachableBoardIds;
+    if (!ids.length) return 0;
+    void takeSnapshot($state.snapshot(data), 'Before removing unused boards');
+    const p = this.activeProfile;
+    for (const id of ids) delete p.boards[id];
+    if (!p.boards[currentBoardId]) currentBoardId = p.homeId;
+    this.persist();
+    return ids.length;
+  },
+
   resetToDefaults(): void {
     void takeSnapshot($state.snapshot(data), 'Before reset');
     const fresh = seedBoards();
@@ -583,6 +733,8 @@ export const app = {
     if (!data.profiles.some((p) => p.id === id)) return;
     data.activeProfileId = id;
     currentBoardId = this.activeProfile.homeId;
+    utterance = []; // the sentence belongs to whoever was building it
+    selectedWordId = null;
     editMode = false;
     revealAll = false; // each communicator gets their own masking back
     this.setTyping(false); // whether the bar has a keyboard is per communicator
@@ -722,7 +874,16 @@ export const app = {
     pendingAction = null;
   },
   async tryUnlock(pin: string): Promise<boolean> {
-    if (!data.lockPin || (await hashPin(pin)) !== data.lockPin) return false;
+    const stored = data.lockPin;
+    if (!stored) return false;
+    const hashed = await hashPin(pin);
+    // A PIN set where hashing was unavailable is stored as marked plain text.
+    // Accept it, and upgrade it now that hashing works here.
+    if (hashed !== stored && `plain:${pin}` !== stored) return false;
+    if (hashed !== stored && !hashed.startsWith('plain:')) {
+      data.lockPin = hashed;
+      this.persist();
+    }
     unlockedThisSession = true;
     pinPromptOpen = false;
     const action = pendingAction;
@@ -747,6 +908,12 @@ export const app = {
     unlockedThisSession = false;
     this.persist();
   },
+  /** The forgotten-PIN path: take the lock off from the PIN pad itself. */
+  forgetPin(): void {
+    this.removePin();
+    pinPromptOpen = false;
+    pendingAction = null;
+  },
   relock(): void {
     unlockedThisSession = false;
     // Hand-back safety: leave no caregiver surface open behind the lock, and
@@ -759,6 +926,7 @@ export const app = {
   },
 
   persist(): void {
+    if (persistBlocked) return; // storage was unreadable at boot; see storageTrouble
     void writeData($state.snapshot(data));
   },
 };

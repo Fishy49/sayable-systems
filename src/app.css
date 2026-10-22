@@ -1637,6 +1637,31 @@ img.sym-img.chip-sym {
   }
 }
 
+/* A link-style button that does something destructive. */
+.link-btn.link-danger {
+  color: var(--danger);
+}
+
+/* The forgotten-PIN control: a hold, so a stray tap does nothing. */
+.pin-forgot {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+  -webkit-touch-callout: none;
+  user-select: none;
+  touch-action: none;
+}
+
+.pin-forgot.holding {
+  color: var(--danger);
+  font-weight: 700;
+}
+
 /* Caregiver lock — the PIN pad and its settings row. */
 .pin-modal {
   max-width: 320px;

@@ -36,6 +36,8 @@ export interface ParseResult {
   ok: boolean;
   profile?: Profile;
   error?: string;
+  /** Something the import had to make do with; worth telling the caregiver. */
+  note?: string;
 }
 
 export function parseProfileFile(text: string): ParseResult {

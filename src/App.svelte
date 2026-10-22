@@ -31,6 +31,18 @@
       app.resetToDefaults();
     }
   }
+
+  function confirmDeleteBoard() {
+    const b = app.board;
+    if (
+      confirm(
+        `Delete the board “${b.name}” and its ${b.tiles.length} tiles? ` +
+          'Any tile that opened it becomes an empty space. A copy is saved first, so you can undo it.',
+      )
+    ) {
+      app.deleteBoard(b.id);
+    }
+  }
 </script>
 
 {#if !app.ready}
@@ -83,10 +95,18 @@
         <button class="link-btn" onclick={() => pwa.applyUpdate()}>Reload</button>
       </p>
     {/if}
-    {#if app.recoveryNotice}
+    {#if app.notice}
       <p class="recovery-notice">
-        ℹ️ {app.recoveryNotice}
-        <button class="link-btn" onclick={() => app.dismissRecovery()}>Dismiss</button>
+        ℹ️ {app.notice}
+        <button class="link-btn" onclick={() => app.dismissNotice()}>Dismiss</button>
+      </p>
+    {/if}
+    {#if app.storageTrouble}
+      <p class="save-error">
+        ⚠️ {app.storageTrouble}
+        {#if !app.persistBlocked}
+          <button class="link-btn" onclick={() => app.dismissStorageTrouble()}>Dismiss</button>
+        {/if}
       </p>
     {/if}
     {#if app.saveError}
@@ -121,6 +141,9 @@
           <span class="mask-count">{app.boardHiddenCount} hidden here</span>
           <button class="link-btn" onclick={() => app.setBoardHidden(true)}>Hide all</button>
           <button class="link-btn" onclick={() => app.setBoardHidden(false)}>Show all</button>
+          {#if !app.isHome}
+            <button class="link-btn link-danger" onclick={confirmDeleteBoard}>Delete this board</button>
+          {/if}
         </span>
       </div>
     {:else}

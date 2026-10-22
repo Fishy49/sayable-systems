@@ -28,7 +28,13 @@
     selected = app.voice.uri ?? '';
   });
 
-  const rate = $derived(app.voice.rate ?? 0.95);
+  // The slider's live position. It persists on release, not on every pixel:
+  // each save rewrites the whole record, pictures and all, and a single sweep
+  // of the thumb fires twenty-odd input events.
+  let rate = $state(0.95);
+  $effect(() => {
+    rate = app.voice.rate ?? 0.95;
+  });
 
   function detectVoiceHint(): string {
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
@@ -113,6 +119,13 @@
 
   function removeLock() {
     if (confirm('Remove the caregiver lock?')) app.removePin();
+  }
+
+  function removeUnused() {
+    const n = app.unreachableBoardIds.length;
+    if (confirm(`Remove ${n} unused board${n === 1 ? '' : 's'}? A copy is saved first, so you can undo it.`)) {
+      app.removeUnreachableBoards();
+    }
   }
 
   // Fullscreen is per-tap browser state, not persisted data, so it lives here.
@@ -203,7 +216,8 @@
                   max="1.5"
                   step="0.05"
                   value={rate}
-                  oninput={(e) => app.setVoiceRate(Number((e.target as HTMLInputElement).value))}
+                  oninput={(e) => (rate = Number((e.target as HTMLInputElement).value))}
+                  onchange={(e) => app.setVoiceRate(Number((e.target as HTMLInputElement).value))}
                 />
               </div>
             {/if}
@@ -351,6 +365,20 @@
                 </p>
               {/if}
             </div>
+
+            {#if app.unreachableBoardIds.length > 0}
+              {@const n = app.unreachableBoardIds.length}
+              <div class="field">
+                <span class="field-label">Unused boards</span>
+                <p class="picker-note">
+                  {n} board{n === 1 ? '' : 's'} can’t be reached from any tile any more, but still take up
+                  room in every save and backup.
+                </p>
+                <div class="lock-actions">
+                  <button class="ghost-dark small" onclick={removeUnused}>Remove {n === 1 ? 'it' : 'them'}</button>
+                </div>
+              </div>
+            {/if}
           {/if}
         </div>
       </div>

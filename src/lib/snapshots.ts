@@ -72,6 +72,20 @@ async function metasNewestFirst(): Promise<SnapshotMeta[]> {
   return (await snapListMeta()).sort((a, b) => b.ts - a.ts);
 }
 
+// Every write to the backup goes through this one chain, so two of them can
+// never interleave. Left to run concurrently, "add mine, then delete everything
+// that isn't mine" from two callers deletes both copies and leaves none, which
+// is the one outcome a single-copy backup must never produce.
+let chain: Promise<void> = Promise.resolve();
+function serialized<T>(job: () => Promise<T>): Promise<T> {
+  const run = chain.then(job);
+  chain = run.then(
+    () => {},
+    () => {},
+  );
+  return run;
+}
+
 /**
  * Replace the backup with a copy of `data`.
  *
@@ -79,17 +93,19 @@ async function metasNewestFirst(): Promise<SnapshotMeta[]> {
  * it replaces is the only one there is. Silently does nothing in that case:
  * the previous good backup stays put, which is the outcome we want.
  */
-export async function takeSnapshot(data: AppData, label: string): Promise<void> {
-  if (!isValidAppData(data)) return;
-  const keepId = await snapAdd(
-    { ts: Date.now(), label, profiles: data.profiles.length, boards: countBoards(data) },
-    data,
-  );
-  // Written first, then the old copy is dropped, so a crash in between leaves
-  // two backups rather than none.
-  for (const m of await snapListMeta()) {
-    if (m.id !== keepId) await snapDelete(m.id);
-  }
+export function takeSnapshot(data: AppData, label: string): Promise<void> {
+  if (!isValidAppData(data)) return Promise.resolve();
+  return serialized(async () => {
+    const keepId = await snapAdd(
+      { ts: Date.now(), label, profiles: data.profiles.length, boards: countBoards(data) },
+      data,
+    );
+    // Written first, then the old copy is dropped, so a crash in between leaves
+    // two backups rather than none.
+    for (const m of await snapListMeta()) {
+      if (m.id !== keepId) await snapDelete(m.id);
+    }
+  });
 }
 
 /** The backup's metadata, or null before the first one is written. */
@@ -102,22 +118,35 @@ export async function currentSnapshot(): Promise<SnapshotMeta | null> {
  * that still restores. Runs at boot for anyone upgrading from the old fifteen;
  * a no-op once there is only one.
  */
-export async function collapseBackups(): Promise<void> {
-  const metas = await metasNewestFirst();
-  if (metas.length <= 1) return;
-  // The newest is not automatically the good one - that is the whole reason the
-  // old design kept a list - so pick the newest that actually validates.
-  let keepId = metas[0].id;
-  for (const m of metas) {
-    const data = await snapGetData(m.id).catch(() => undefined);
-    if (isValidAppData(data)) {
-      keepId = m.id;
-      break;
+export function collapseBackups(): Promise<void> {
+  return serialized(async () => {
+    const metas = await metasNewestFirst();
+    if (metas.length <= 1) return;
+    // The newest is not automatically the good one - that is the whole reason the
+    // old design kept a list - so pick the newest that actually validates.
+    let keepId = metas[0].id;
+    for (const m of metas) {
+      const data = await snapGetData(m.id).catch(() => undefined);
+      if (isValidAppData(data)) {
+        keepId = m.id;
+        break;
+      }
     }
-  }
-  for (const m of metas) {
-    if (m.id !== keepId) await snapDelete(m.id);
-  }
+    for (const m of metas) {
+      if (m.id !== keepId) await snapDelete(m.id);
+    }
+  });
+}
+
+/**
+ * The newest backup's payload whether or not it validates. For setting a copy
+ * aside when the live record has been rejected: at that point the backup is
+ * the only other trace of the boards, and the next backup written will
+ * replace it.
+ */
+export async function newestSnapshotRaw(): Promise<unknown> {
+  const m = (await metasNewestFirst())[0];
+  return m ? snapGetData(m.id).catch(() => undefined) : undefined;
 }
 
 /** Newest backup whose payload still validates - the self-heal source. */

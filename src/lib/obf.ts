@@ -13,7 +13,7 @@
 
 import type { Board, Profile, Tile, TileAction } from './types';
 import { isValidProfile } from './snapshots';
-import { isImageSymbol } from './symbols';
+import { isImageSymbol, urlToResizedDataUrl } from './symbols';
 import { zip, unzip, type ZipEntry } from './zip';
 
 export const OBF_FORMAT = 'open-board-0.1';
@@ -208,13 +208,32 @@ export function obzFileName(name: string, date: Date): string {
 
 // ================= IMPORT =================
 
+// How long to wait on any one remote picture before giving up on embedding
+// it. A bundle can carry hundreds, and an import must not hang on a slow one.
+const REMOTE_IMAGE_TIMEOUT_MS = 8000;
+
+/** Running tally for one import, so the result can say what it had to do. */
+interface ImportStats {
+  linked: number; // pictures left as remote links because they couldn't be fetched
+}
+
 async function resolveImage(
   img: ObfImage | undefined,
   files: Map<string, Uint8Array> | null,
+  stats: ImportStats,
 ): Promise<string | null> {
   if (!img) return null;
   if (img.data) return img.data.startsWith('data:') ? img.data : `data:${img.content_type ?? 'image/png'};base64,${img.data}`;
-  if (img.url) return img.url;
+  if (img.url) {
+    // Embed it. Left as a URL, the tile would fetch from that server every
+    // time the board is shown and go blank the moment the device is offline.
+    try {
+      return await urlToResizedDataUrl(img.url, AbortSignal.timeout(REMOTE_IMAGE_TIMEOUT_MS));
+    } catch {
+      stats.linked++;
+      return img.url;
+    }
+  }
   if (img.path && files) {
     const bytes = files.get(img.path) ?? files.get(img.path.replace(/^\.?\//, ''));
     if (bytes) return `data:${img.content_type ?? 'image/png'};base64,${u8ToBase64(bytes)}`;
@@ -250,6 +269,7 @@ async function buttonToTile(
   imagesById: Map<string, ObfImage>,
   files: Map<string, Uint8Array> | null,
   index: BoardIndex | null,
+  stats: ImportStats,
 ): Promise<Tile> {
   if (isSpecialtyAction(btn)) return blankTile();
 
@@ -271,14 +291,16 @@ async function buttonToTile(
 
   let symbol = '';
   if (btn.image_id != null) {
-    symbol = (await resolveImage(imagesById.get(String(btn.image_id)), files)) ?? '';
+    symbol = (await resolveImage(imagesById.get(String(btn.image_id)), files, stats)) ?? '';
   }
   if (!symbol && btn.ext_sayable_symbol) symbol = btn.ext_sayable_symbol;
   if (!symbol) symbol = goto ? '📂' : '💬'; // Sayable always needs a glyph
 
   const tile: Tile = {
     id: String(btn.id ?? rid('t')),
-    text: text || symbol,
+    // A picture-only button keeps no words: an emoji can stand in for them,
+    // an image's data URL read aloud cannot.
+    text: text || (isImageSymbol(symbol) ? '' : symbol),
     symbol,
     bg: colorToHex(btn.background_color, goto ? DEFAULT_GOTO_BG : DEFAULT_SPEAK_BG),
     action,
@@ -291,7 +313,8 @@ async function buttonToTile(
 async function obfToBoard(
   obf: ObfBoard,
   files: Map<string, Uint8Array> | null,
-  index: BoardIndex | null = null,
+  index: BoardIndex | null,
+  stats: ImportStats,
 ): Promise<Board> {
   const buttonsById = new Map<string, ObfButton>((obf.buttons ?? []).map((b) => [String(b.id), b]));
   const imagesById = new Map<string, ObfImage>((obf.images ?? []).map((im) => [String(im.id), im]));
@@ -328,7 +351,7 @@ async function obfToBoard(
   }
 
   const tiles: Tile[] = [];
-  for (const b of ordered) tiles.push(b ? await buttonToTile(b, imagesById, files, index) : blankTile());
+  for (const b of ordered) tiles.push(b ? await buttonToTile(b, imagesById, files, index, stats) : blankTile());
 
   return { id: String(obf.id ?? rid('b')), name: obf.name ?? 'Board', rows, cols, tiles };
 }
@@ -337,11 +360,20 @@ export interface ParseResult {
   ok: boolean;
   profile?: Profile;
   error?: string;
+  /** Something the import had to make do with; worth telling the caregiver. */
+  note?: string;
+}
+
+function linkedNote(stats: ImportStats): string | undefined {
+  const n = stats.linked;
+  if (!n) return undefined;
+  return `${n} picture${n === 1 ? '' : 's'} couldn\u2019t be copied onto this device and will only show while online.`;
 }
 
 /** Build a Profile from a parsed single-board `.obf`. */
 async function singleObfToProfile(obf: ObfBoard): Promise<ParseResult> {
-  const board = await obfToBoard(obf, null);
+  const stats: ImportStats = { linked: 0 };
+  const board = await obfToBoard(obf, null, null, stats);
   const profile: Profile = {
     id: rid('p'),
     name: obf.ext_sayable_profile_name || obf.name || 'Imported board',
@@ -349,7 +381,7 @@ async function singleObfToProfile(obf: ObfBoard): Promise<ParseResult> {
     boards: { [board.id]: board },
   };
   if (!isValidProfile(profile)) return { ok: false, error: 'That board file is incomplete or unsupported.' };
-  return { ok: true, profile };
+  return { ok: true, profile, note: linkedNote(stats) };
 }
 
 /** Build a Profile from a `.obz` byte array. */
@@ -396,8 +428,9 @@ export async function obzToProfile(bytes: Uint8Array): Promise<ParseResult> {
 
   const boards: Record<string, Board> = {};
   let profileName = 'Imported boards';
+  const stats: ImportStats = { linked: 0 };
   for (const { obf } of parsed) {
-    const board = await obfToBoard(obf, files, index);
+    const board = await obfToBoard(obf, files, index, stats);
     boards[board.id] = board;
     if (obf.ext_sayable_profile_name) profileName = obf.ext_sayable_profile_name;
   }
@@ -411,7 +444,7 @@ export async function obzToProfile(bytes: Uint8Array): Promise<ParseResult> {
 
   const profile: Profile = { id: rid('p'), name: profileName, homeId, boards };
   if (!isValidProfile(profile)) return { ok: false, error: 'The boards in this .obz are incomplete or unsupported.' };
-  return { ok: true, profile };
+  return { ok: true, profile, note: linkedNote(stats) };
 }
 
 /** True when parsed JSON looks like a single OBF board. */

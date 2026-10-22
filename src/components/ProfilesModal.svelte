@@ -43,6 +43,17 @@
     return Object.keys(p.boards).length;
   }
 
+  function confirmDelete(p: Profile) {
+    if (
+      confirm(
+        `Delete ${p.name} and all ${boardCount(p)} of their boards? ` +
+          'A copy is saved first, so this can be undone from Settings for a while.',
+      )
+    ) {
+      app.deleteProfile(p.id);
+    }
+  }
+
   async function exportProfile(p: Profile) {
     const now = new Date();
     await saveTextFile(fileNameForProfile(p.name, now), serializeProfile(p, now.toISOString()));
@@ -83,6 +94,7 @@
         return;
       }
       app.importProfile(res.profile); // adds, switches, closes the modal
+      if (res.note) app.showNotice(res.note);
     } catch {
       importError = 'Could not read that file.';
     }
@@ -135,7 +147,7 @@
               <button class="icon-btn obf-chip" aria-label={`Export ${p.name} as Open Board Format`} title="Export as Open Board Format (.obz) — for other AAC apps" onclick={() => exportProfileObf(p)}>OBF</button>
               <button class="icon-btn" aria-label={`Rename ${p.name}`} onclick={() => startRename(p.id, p.name)}>✏️</button>
               {#if app.profiles.length > 1}
-                <button class="icon-btn" aria-label={`Delete ${p.name}`} onclick={() => app.deleteProfile(p.id)}>🗑️</button>
+                <button class="icon-btn" aria-label={`Delete ${p.name}`} onclick={() => confirmDelete(p)}>🗑️</button>
               {/if}
             </div>
           </div>

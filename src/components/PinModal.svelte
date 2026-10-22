@@ -51,6 +51,30 @@
     error = '';
   }
 
+  // Forgotten PIN. This is a child lock, not a vault: the way back in only has
+  // to be out of reach of the communicator it guards, so it asks for a press
+  // held for a few seconds and then a grown-up's confirmation.
+  const HOLD_MS = 3000;
+  let holding = $state(false);
+  let holdTimer: ReturnType<typeof setTimeout> | null = null;
+  function holdStart() {
+    holding = true;
+    holdTimer = setTimeout(() => {
+      holdTimer = null;
+      holding = false;
+      if (confirm('Remove the caregiver lock? Editing, settings and profiles will open without a PIN until a new one is set.')) {
+        app.forgetPin();
+      }
+    }, HOLD_MS);
+  }
+  function holdEnd() {
+    holding = false;
+    if (holdTimer !== null) {
+      clearTimeout(holdTimer);
+      holdTimer = null;
+    }
+  }
+
   function onKey(e: KeyboardEvent) {
     if (!open) return;
     if (e.key === 'Escape') app.cancelPin();
@@ -87,6 +111,20 @@
         <button class="pin-key" onclick={() => press('0')}>0</button>
         <button class="pin-key ghosted" aria-label="Delete digit" onclick={back}>⌫</button>
       </div>
+      {#if !isSetup}
+        <button
+          type="button"
+          class="pin-forgot"
+          class:holding
+          onpointerdown={holdStart}
+          onpointerup={holdEnd}
+          onpointerleave={holdEnd}
+          onpointercancel={holdEnd}
+          oncontextmenu={(e) => e.preventDefault()}
+        >
+          {holding ? 'Keep holding…' : 'Forgot the PIN? Press and hold here'}
+        </button>
+      {/if}
     </div>
   </div>
 {/if}

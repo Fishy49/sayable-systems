@@ -53,6 +53,19 @@ export async function toDataUrl(url: string, signal?: AbortSignal): Promise<stri
 }
 
 /**
+ * Fetch a remote image and embed it, scaled down, as a data URL. For imports
+ * whose boards point at pictures on someone else's server: embedded, they work
+ * offline and nothing is requested from anywhere each time a board is shown.
+ */
+export async function urlToResizedDataUrl(url: string, signal?: AbortSignal): Promise<string> {
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`Image fetch failed (${res.status})`);
+  const blob = await res.blob();
+  if (!blob.type.startsWith('image/')) throw new Error('Not an image.');
+  return fileToResizedDataUrl(new File([blob], 'image', { type: blob.type }));
+}
+
+/**
  * Turn an uploaded image File into a small, self-contained data URL: decoded,
  * scaled down to `maxSize`, and re-encoded. Keeps localStorage light and the
  * symbol fully offline. Falls back from WebP to PNG where WebP export is absent.
@@ -67,6 +80,11 @@ export function fileToResizedDataUrl(file: File, maxSize = 320, quality = 0.82):
     const img = new Image();
     img.onload = () => {
       URL.revokeObjectURL(url);
+      // An SVG with no intrinsic size decodes as 0x0 and would shrink to a dot.
+      if (!img.width || !img.height) {
+        reject(new Error('Could not read that image\u2019s size.'));
+        return;
+      }
       const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
       const w = Math.max(1, Math.round(img.width * scale));
       const h = Math.max(1, Math.round(img.height * scale));
