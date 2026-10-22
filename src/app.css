@@ -1335,6 +1335,68 @@ img.sym-img.chip-sym {
 /* ---------- settings modal ---------- */
 .settings-modal {
   max-width: 440px;
+  /* Only the panel scrolls, so the tabs and Done stay put on a long section. */
+  overflow: hidden;
+  container-type: inline-size;
+}
+
+/* ---------- settings tabs ---------- */
+.settings-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface);
+  border-radius: 12px;
+}
+
+.settings-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 9px 6px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-tab[aria-selected='true'] {
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18);
+}
+
+.settings-panel {
+  flex: 1 1 auto;
+  min-height: 0; /* must be free to shrink, or it pushes Done out of a short modal */
+  overflow-y: auto;
+}
+
+.settings-panel-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* Steadies the modal height between a short tab and a long one. It sits on
+     the content rather than the scroll box so a short screen can still shrink
+     the panel and scroll it. */
+  min-height: 260px;
+}
+
+/* Four labels have to fit the modal, which on a 320px phone is 288px wide.
+   A container query, not a media query: what matters is how wide the modal
+   ended up, not how wide the window is. */
+@container (max-width: 330px) {
+  .settings-tab {
+    font-size: 0.78rem;
+    padding: 9px 2px;
+  }
 }
 
 .range {
