@@ -186,12 +186,19 @@ body {
 .utterance {
   flex: 0 0 auto;
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
   padding: 10px 12px;
   padding-left: calc(12px + env(safe-area-inset-left));
   padding-right: calc(12px + env(safe-area-inset-right));
   background: var(--panel);
   border-bottom: 1px solid var(--line);
+}
+
+/* The sentence and its buttons. A second row joins it when the keyboard opens. */
+.bar-row {
+  display: flex;
+  gap: 10px;
 }
 
 .strip {
@@ -257,6 +264,47 @@ body {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+
+.bar-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The keyboard key reads as pressed while its row is open. */
+.bar-btn.type.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+/* ---------- typing into the sentence bar ---------- */
+/* Sits under the sentence so a tapped word and a typed one stay visible
+   together. The bar is at the top of the app, so a soft keyboard rising from
+   the bottom covers the board rather than the field being typed into. */
+.type-row {
+  display: flex;
+  gap: 8px;
+}
+
+.type-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 1.15rem;
+  padding: 12px 14px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  border-radius: 14px;
+}
+
+.type-field::placeholder {
+  color: #94a3b8;
+}
+
+.type-row .bar-btn {
+  padding: 0 14px;
 }
 
 /* ---------- board grid ---------- */

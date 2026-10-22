@@ -48,6 +48,10 @@ export interface Profile {
   boards: Record<string, Board>;
   voice?: VoicePref;
   showShapes?: boolean; // category shape badges (default on when undefined)
+  // Whether the sentence bar offers a keyboard (default on when undefined).
+  // Turned off for a communicator who doesn't read yet, so a stray tap can't
+  // raise a soft keyboard over the board.
+  allowTyping?: boolean;
 }
 
 // Top-level persisted state: every profile, plus which one is active.
@@ -69,6 +73,6 @@ export interface AppData {
 export interface SpokenWord {
   id: string;
   text: string; // what shows in the sentence bar
-  symbol: string;
+  symbol: string; // empty for a typed word, which has no picture
   spoken?: string; // what to actually speak on readback, if it differs from text
 }

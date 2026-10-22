@@ -151,6 +151,22 @@
 
       <label class="toggle-row">
         <span class="toggle-text">
+          <span class="field-label">Keyboard in the sentence bar</span>
+          <span class="toggle-hint">
+            Adds a ⌨ to the bar for spelling out words that aren’t on a board. Turn it off
+            for a communicator who doesn’t read yet.
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          class="switch"
+          checked={app.canType}
+          onchange={(e) => app.setAllowTyping((e.target as HTMLInputElement).checked)}
+        />
+      </label>
+
+      <label class="toggle-row">
+        <span class="toggle-text">
           <span class="field-label">Category shapes</span>
           <span class="toggle-hint">A shape per word type, so color isn’t the only cue.</span>
         </span>

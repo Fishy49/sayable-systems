@@ -126,6 +126,10 @@ let data = $state<AppData>(placeholder);
 let currentBoardId = $state<string>(placeholder.profiles[0].homeId);
 let utterance = $state<SpokenWord[]>([]);
 let wordSeq = 0;
+// Keyboard-in-the-bar state. Both are session-only on purpose: a half-typed
+// word is not something anyone wants restored on the next launch.
+let typing = $state(false);
+let draft = $state('');
 let ready = $state(false);
 let saveError = $state(false);
 let storageWarning = $state<string | null>(null);
@@ -286,6 +290,17 @@ export const app = {
   get sentence(): string {
     return utterance.map((w) => w.text).join(' ');
   },
+  /** Whether this communicator's bar offers a keyboard at all. */
+  get canType(): boolean {
+    return this.activeProfile.allowTyping !== false;
+  },
+  /** Whether the keyboard row is currently showing. */
+  get typing(): boolean {
+    return typing && this.canType;
+  },
+  get draft(): string {
+    return draft;
+  },
 
   // ----- editing -----
   get editMode(): boolean {
@@ -338,6 +353,42 @@ export const app = {
   },
   clear(): void {
     utterance = [];
+    draft = '';
+  },
+
+  // ----- typing -----
+  // Typed words join the sentence as chips, exactly like tapped tiles, so one
+  // sentence can mix both and read back as a single phrase.
+  setDraft(text: string): void {
+    draft = text;
+  },
+  setTyping(on: boolean): void {
+    typing = on;
+    if (!on) draft = '';
+  },
+  toggleTyping(): void {
+    this.setTyping(!typing);
+  },
+  /**
+   * Turn the draft into a word in the sentence and say it. Keeps typing mode
+   * open so the next word can follow without another tap.
+   */
+  commitDraft(): void {
+    const text = draft.trim().replace(/\s+/g, ' ');
+    draft = '';
+    if (!text) return;
+    utterance = [...utterance, { id: `w${++wordSeq}`, text, symbol: '' }];
+    if (this.logging) {
+      // Log each real word, not the phrase as one entry, so the vocabulary
+      // in the usage report stays comparable with tapped words.
+      for (const w of text.split(' ')) logWord(this.activeProfile.id, w);
+    }
+    speak(text, { voiceURI: this.voice.uri, rate: this.voice.rate });
+  },
+  setAllowTyping(on: boolean): void {
+    this.activeProfile.allowTyping = on;
+    if (!on) this.setTyping(false);
+    this.persist();
   },
 
   toggleEdit(): void {
@@ -504,6 +555,7 @@ export const app = {
     currentBoardId = this.activeProfile.homeId;
     editMode = false;
     revealAll = false; // each communicator gets their own masking back
+    this.setTyping(false); // whether the bar has a keyboard is per communicator
     this.closeEditor();
     this.closeProfiles();
     this.persist();
