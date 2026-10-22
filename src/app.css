@@ -1014,6 +1014,14 @@ img.sym-img.chip-sym {
   color: inherit;
 }
 
+/* The address is the link text on purpose: in a locked-down kiosk a mailto:
+   may open nothing, and a visible address can still be read and copied. */
+.mail-link {
+  color: var(--accent);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .upload-area {
   display: flex;
   flex-direction: column;

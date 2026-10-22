@@ -282,6 +282,17 @@
         {/if}
       </div>
 
+      <div class="field">
+        <span class="field-label">Get in touch</span>
+        <p class="picker-note">
+          Sayable has no accounts and no tracking, so nothing about how you use it reaches anyone.
+          That also means the only way we hear that something is broken, missing, or working well is
+          if you tell us: <a class="mail-link" href="mailto:contact@sayable.systems"
+            >contact@sayable.systems</a
+          >
+        </p>
+      </div>
+
       <div class="modal-actions">
         <button class="ghost-dark" onclick={test}>▶ Test voice</button>
         <span class="grow"></span>
